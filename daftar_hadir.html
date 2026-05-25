@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Daftar Hadir Acara</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Excel JS -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <!-- pdfMake untuk cetak sertifikat native -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.7/pdfmake.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.7/vfs_fonts.js"></script>
+    <script src="gotham-font.js"></script>
+    <script src="logo-tvri.js"></script>
+    <script src="ttd_sannydisposisi.js"></script>
+    <script src="fonts_sertifikat.js"></script>
+    <style>
+        body { background-color: #f8f9fa; }
+    </style>
+</head>
+<body>
+
+    <div class="container py-5">
+        <div class="card shadow-sm">
+            <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                <h5 class="mb-0 fw-bold">Daftar Kehadiran</h5>
+                <div>
+                    <button onclick="unduhSemuaSertifikat()" class="btn btn-warning btn-sm fw-bold me-2">Unduh Semua Sertifikat</button>
+                    <button onclick="exportToExcel()" class="btn btn-success btn-sm fw-bold">Ekspor ke Excel</button>
+                </div>
+            </div>
+            <div class="card-body">
+                <h4 id="judulAcara" class="text-center fw-bold mb-1 text-primary">Memuat...</h4>
+                <p id="waktuAcara" class="text-center text-muted mb-4"></p>
+
+                <div class="table-responsive">
+                    <table class="table table-bordered table-striped" id="tabelHadir">
+                        <thead class="table-light">
+                            <tr>
+                                <th>No</th>
+                                <th>Waktu Hadir</th>
+                                <th>Jenis Peserta</th>
+                                <th>Nama Lengkap</th>
+                                <th>Email</th>
+                                <th>NIP / NIK</th>
+                                <th>Nomor HP</th>
+                                <th>Jabatan</th>
+                                <th>Satuan Kerja / Instansi</th>
+                                <th>Tanda Tangan</th>
+                                <th>Sertifikat</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tbodyHadir">
+                            <tr><td colspan="10" class="text-center">Memuat data...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+        import { getFirestore, doc, getDoc, collection, getDocs, orderBy, query } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyDTx_0nd6vz4ptWSI02mMCsKK0ZTeLSF_Q",
+            authDomain: "sistem-tu-c58ee.firebaseapp.com",
+            projectId: "sistem-tu-c58ee",
+            storageBucket: "sistem-tu-c58ee.firebasestorage.app",
+            messagingSenderId: "844322733823",
+            appId: "1:844322733823:web:73d71d3d083633f5a716ca"
+        };
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+
+        let eventId = new URLSearchParams(window.location.search).get('id');
+        let judulSuratFile = "Daftar_Hadir";
+
+        async function init() {
+            if (!eventId) {
+                document.getElementById('judulAcara').innerText = "ID Acara tidak valid.";
+                document.getElementById('tbodyHadir').innerHTML = "";
+                return;
+            }
+
+            try {
+                // Get event metadata
+                const docSnap = await getDoc(doc(db, "events", eventId));
+                if (docSnap.exists()) {
+                    const data = docSnap.data();
+                    document.getElementById('judulAcara').innerText = data.judul;
+                    judulSuratFile = data.judul;
+                    if (data.waktu) {
+                        document.getElementById('waktuAcara').innerText = new Date(data.waktu).toLocaleString('id-ID');
+                    }
+                }
+
+                // Get attendees
+                const q = query(collection(db, "events", eventId, "kehadiran"), orderBy("waktuHadir", "asc"));
+                const querySnapshot = await getDocs(q);
+                
+                const tbody = document.getElementById('tbodyHadir');
+                tbody.innerHTML = '';
+
+                if (querySnapshot.empty) {
+                    tbody.innerHTML = '<tr><td colspan="10" class="text-center">Belum ada daftar hadir.</td></tr>';
+                    return;
+                }
+
+                let no = 1;
+                querySnapshot.forEach((docH) => {
+                    const h = docH.data();
+                    const tr = document.createElement('tr');
+                    const imgTtd = h.signatureDataUrl ? `<img src="${h.signatureDataUrl}" alt="TTD" style="max-height: 50px; border: 1px solid #ccc; background: white;">` : '-';
+                    const noVal = no++;
+                    tr.innerHTML = `
+                        <td class="text-center align-middle">
+                            <button onclick="window.promptMoveRow(this)" class="btn btn-sm btn-outline-primary fw-bold btn-no-urut" title="Klik untuk ubah urutan">${noVal}</button>
+                            <input type="hidden" class="no-urut-input" value="${noVal}">
+                        </td>
+                        <td>${new Date(h.waktuHadir).toLocaleString('id-ID')}</td>
+                        <td>${h.jenisPeserta || '-'}</td>
+                        <td>${h.nama || '-'}</td>
+                        <td>${h.email || '-'}</td>
+                        <td>${h.nip || '-'}</td>
+                        <td>${h.noHp || '-'}</td>
+                        <td>${h.jabatan || '-'}</td>
+                        <td>${h.instansi || '-'}</td>
+                        <td class="text-center">${imgTtd}</td>
+                        <td class="text-center">
+                            <button onclick="window.unduhSertifikat(this, '${h.nama ? h.nama.replace(/'/g, "\\'") : '-'}', '${h.nip ? h.nip.replace(/'/g, "\\'") : '-'}', '${h.jabatan ? h.jabatan.replace(/'/g, "\\'") : '-'}', '${h.instansi ? h.instansi.replace(/'/g, "\\'") : '-'}')" class="btn btn-sm btn-primary fw-bold">⬇️ Cetak</button>
+                        </td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+
+            } catch (error) {
+                console.error("Gagal", error);
+                alert("Gagal memuat daftar hadir.");
+            }
+        }
+
+        window.promptMoveRow = (btn) => {
+            const row = btn.closest('tr');
+            const tbody = row.parentNode;
+            const rows = Array.from(tbody.children);
+            const currIndex = rows.indexOf(row);
+            
+            let newPos = prompt("Pindahkan peserta ini ke nomor urut berapa?", currIndex + 1);
+            if (!newPos) return;
+            
+            newPos = parseInt(newPos);
+            if (isNaN(newPos) || newPos < 1) {
+                alert("Nomor urut tidak valid.");
+                return;
+            }
+            
+            let targetIndex = newPos - 1;
+            if (targetIndex >= rows.length) targetIndex = rows.length - 1;
+            
+            if (targetIndex !== currIndex) {
+                rows.splice(currIndex, 1);
+                rows.splice(targetIndex, 0, row);
+                
+                tbody.innerHTML = '';
+                rows.forEach(r => tbody.appendChild(r));
+                
+                // Update label tombol dan input hidden
+                const allRows = tbody.children;
+                for (let i = 0; i < allRows.length; i++) {
+                    const btnUrut = allRows[i].querySelector('.btn-no-urut');
+                    const hiddenInput = allRows[i].querySelector('.no-urut-input');
+                    if (btnUrut) btnUrut.innerText = i + 1;
+                    if (hiddenInput) hiddenInput.value = i + 1;
+                }
+            }
+        };
+
+        window.exportToExcel = () => {
+            const table = document.getElementById("tabelHadir");
+            const wb = XLSX.utils.table_to_book(table, { sheet: "Kehadiran" });
+            XLSX.writeFile(wb, "Daftar_Hadir_" + judulSuratFile + ".xlsx");
+        };
+
+        // Fungsi Load Gambar Latar (Template Sertifikat PNG)
+        async function loadBackgroundImage(url) {
+            return new Promise((resolve, reject) => {
+                const img = new Image();
+                img.crossOrigin = 'Anonymous';
+                img.onload = () => {
+                    const canvas = document.createElement('canvas');
+                    canvas.width = img.width;
+                    canvas.height = img.height;
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0);
+                    resolve(canvas.toDataURL('image/png'));
+                };
+                img.onerror = () => resolve(null); // Return null jika file tidak ditemukan
+                img.src = url;
+            });
+        }
+
+        // Konfigurasi Sertifikat Native pdfMake
+        window.buildDocDefinition = (noUrut, nama, nip, jabatan, instansi, bgData) => {
+            const formatNo = String(noUrut).padStart(3, '0');
+            return {
+                pageOrientation: 'landscape',
+                pageSize: 'A4',
+                pageMargins: [60, 40, 60, 40],
+                defaultStyle: {
+                    font: 'Calibri'
+                },
+                background: [
+                    {
+                        image: bgData,
+                        width: 841.89,
+                        height: 595.28
+                    },
+                    {
+                        image: (typeof window.ttdKepstaBase64 !== 'undefined') ? 'data:image/png;base64,' + window.ttdKepstaBase64 : '',
+                        width: 100,
+                        absolutePosition: { x: 370, y: 380 } 
+                    }
+                ],
+                content: [
+                    { text: 'SERTIFIKAT', font: 'ArialBlack', alignment: 'center', fontSize: 28, color: '#1E3A8A', margin: [0, 0, 0, 15] },
+                    { text: `Nomor : ${formatNo}/KP.10.08/II.3/V/2026`, alignment: 'center', fontSize: 18, margin: [0, 0, 0, 20] },
+                    { text: 'Diberikan Kepada :', alignment: 'center', fontSize: 18, margin: [0, 0, 0, 20] },
+                    {
+                        table: {
+                            widths: ['*', 'auto', 'auto', 'auto', '*'],
+                            body: [
+                                ['', { text: 'Nama', fontSize: 18 }, { text: ':', fontSize: 18 }, { text: nama.toUpperCase(), fontSize: 18 }, ''],
+                                ['', { text: 'NIP/NIK', fontSize: 18, margin: [0, 5, 0, 0] }, { text: ':', fontSize: 18, margin: [0, 5, 0, 0] }, { text: nip, fontSize: 18, margin: [0, 5, 0, 0] }, ''],
+                                ['', { text: 'Jabatan', fontSize: 18, margin: [0, 5, 0, 0] }, { text: ':', fontSize: 18, margin: [0, 5, 0, 0] }, { text: jabatan, fontSize: 18, margin: [0, 5, 0, 0] }, ''],
+                                ['', { text: 'Satuan Kerja', fontSize: 18, margin: [0, 5, 0, 0] }, { text: ':', fontSize: 18, margin: [0, 5, 0, 0] }, { text: instansi, fontSize: 18, margin: [0, 5, 0, 0] }, '']
+                            ]
+                        },
+                        layout: 'noBorders',
+                        margin: [0, 0, 0, 20]
+                    },
+                    { text: 'atas partisipasinya sebagai peserta', alignment: 'center', fontSize: 18, margin: [0, 0, 0, 10] },
+                    { text: document.getElementById('judulAcara').innerText || 'Forum Konsultasi Publik', alignment: 'center', fontSize: 18, margin: [0, 0, 0, 10] },
+                    { text: 'di TVRI Stasiun Jawa Tengah, 05 Juni 2026', alignment: 'center', fontSize: 18, margin: [0, 0, 0, 30] },
+                    { text: 'Kepala TVRI Stasiun Jawa Tengah', alignment: 'center', fontSize: 18, margin: [0, 0, 0, 55] },
+                    { text: 'Sanny Damanik', alignment: 'center', fontSize: 18, bold: true },
+                    { text: 'NIP. 196904031998032004', alignment: 'center', fontSize: 18 }
+                ]
+            };
+        };
+
+        // Fungsi Cetak 1 Sertifikat
+        window.unduhSertifikat = async (btnElement, nama, nip, jabatan, instansi) => {
+            if (!nama || nama === '-') return alert('Nama peserta tidak valid!');
+            
+            const btn = btnElement;
+            const originalText = btn.innerHTML;
+            btn.innerHTML = 'Sedang diproses...';
+            btn.disabled = true;
+
+            // Ambil nomor urut dari input di baris yang sama
+            const tr = btn.closest('tr');
+            const noUrut = tr.querySelector('.no-urut-input').value || '000';
+
+            try {
+                const cacheBuster = new Date().getTime();
+                const bgData = await loadBackgroundImage('./SERTIFIKAT.png?v=' + cacheBuster);
+                
+                if (!bgData) {
+                    alert('Gagal! File "SERTIFIKAT.png" tidak ditemukan.');
+                    return;
+                }
+
+                if (typeof window.calibriBase64 !== 'undefined') pdfMake.vfs['calibri.ttf'] = window.calibriBase64;
+                if (typeof window.ariblkBase64 !== 'undefined') pdfMake.vfs['ariblk.ttf'] = window.ariblkBase64;
+
+                const fonts = { 
+                    Calibri: { normal: 'calibri.ttf', bold: 'calibri.ttf', italics: 'calibri.ttf', bolditalics: 'calibri.ttf' },
+                    ArialBlack: { normal: 'ariblk.ttf', bold: 'ariblk.ttf', italics: 'ariblk.ttf', bolditalics: 'ariblk.ttf' }
+                };
+                
+                const docDef = buildDocDefinition(noUrut, nama, nip, jabatan, instansi, bgData);
+                
+                pdfMake.createPdf(docDef, null, fonts).download(`Sertifikat_${nama.replace(/[^a-zA-Z0-9]/g, '_')}.pdf`);
+            } catch (e) {
+                console.error(e);
+                alert('Terjadi kesalahan saat memproses PDF.');
+            } finally {
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+            }
+        };
+
+        // Fungsi Cetak Semua Sertifikat
+        window.unduhSemuaSertifikat = async () => {
+            const barisPeserta = document.querySelectorAll('#tbodyHadir tr');
+            if (barisPeserta.length === 0 || (barisPeserta.length === 1 && barisPeserta[0].innerText.includes('Belum ada'))) {
+                return alert("Belum ada data peserta.");
+            }
+
+            if (!confirm(`Sistem akan mendownload sertifikat secara berurutan. Lanjutkan?`)) return;
+
+            const cacheBuster = new Date().getTime();
+            const bgData = await loadBackgroundImage('./SERTIFIKAT.png?v=' + cacheBuster);
+            if (!bgData) {
+                return alert('Gagal! File "SERTIFIKAT.png" tidak ditemukan.');
+            }
+
+            if (typeof window.calibriBase64 !== 'undefined') pdfMake.vfs['calibri.ttf'] = window.calibriBase64;
+            if (typeof window.ariblkBase64 !== 'undefined') pdfMake.vfs['ariblk.ttf'] = window.ariblkBase64;
+
+            const fonts = { 
+                Calibri: { normal: 'calibri.ttf', bold: 'calibri.ttf', italics: 'calibri.ttf', bolditalics: 'calibri.ttf' },
+                ArialBlack: { normal: 'ariblk.ttf', bold: 'ariblk.ttf', italics: 'ariblk.ttf', bolditalics: 'ariblk.ttf' }
+            };
+                
+            for (let i = 0; i < barisPeserta.length; i++) {
+                const sel = barisPeserta[i].querySelectorAll('td');
+                if (sel.length < 10) continue;
+                
+                const noUrut = sel[0].querySelector('input').value || (i + 1);
+                const nama = sel[3].innerText;
+                const nip = sel[5].innerText;
+                const jabatan = sel[7].innerText;
+                const instansi = sel[8].innerText;
+
+                if (!nama || nama === '-') continue;
+
+                const docDef = buildDocDefinition(noUrut, nama, nip, jabatan, instansi, bgData);
+                pdfMake.createPdf(docDef, null, fonts).download(`Sertifikat_${nama.replace(/[^a-zA-Z0-9]/g, '_')}.pdf`);
+                
+                await new Promise(r => setTimeout(r, 600));
+            }
+            alert("Proses download massal selesai!");
+        };
+
+        init();
+    </script>
+</body>
+</html>

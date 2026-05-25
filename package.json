@@ -1,0 +1,21 @@
+{
+  "dependencies": {
+    "google-auth-library": "^10.6.2",
+    "html-to-pdfmake": "^2.5.33",
+    "jsdom": "^29.1.1",
+    "mammoth": "^1.12.0",
+    "pdfmake": "^0.3.8",
+    "puppeteer-core": "^25.0.4"
+  },
+  "name": "aplikasi",
+  "version": "1.0.0",
+  "description": "",
+  "main": "build_katim_ui.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs"
+}

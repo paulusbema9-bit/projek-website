@@ -1,0 +1,839 @@
+<!DOCTYPE html>
+<html lang="id">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Meta Data - TU Digital</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <style>
+        :root {
+            --primary: #2c3e50;
+            --accent: #3498db;
+        }
+
+        body {
+            background-color: #f4f7f6;
+            font-family: 'Segoe UI', sans-serif;
+        }
+
+        .navbar {
+            background-color: var(--primary);
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+        }
+
+        .table-responsive {
+            max-height: 700px;
+        }
+
+        th,
+        td {
+            font-size: 0.85rem;
+        }
+
+        th {
+            white-space: nowrap;
+        }
+
+        td {
+            vertical-align: top;
+        }
+
+        .row-kegiatan {
+            background-color: #e3f2fd;
+        }
+
+        .row-komponen {
+            background-color: #f1f8e9;
+        }
+
+        .row-aktivitas {
+            background-color: #fffde7;
+        }
+
+        .entry-box {
+            font-size: 0.75rem;
+            margin-bottom: 8px;
+            word-wrap: break-word;
+            white-space: pre-wrap;
+            line-height: 1.3;
+        }
+    </style>
+</head>
+
+<body>
+    <nav class="navbar navbar-dark mb-4 p-3 text-white">
+        <div class="container-fluid d-flex justify-content-between align-items-center">
+            <span class="navbar-brand fw-bold m-0">
+                TU DIGITAL - Meta Data (<span id="displayRole"></span>)
+            </span>
+            <div>
+                <a href="index.html" class="btn btn-sm btn-outline-light">Kembali ke Dashboard</a>
+            </div>
+        </div>
+    </nav>
+    <div class="container-fluid px-4 pb-5">
+        <div class="card p-4 shadow-sm mb-4">
+            <h5 class="fw-bold text-primary mb-3">Sinkronisasi Pohon Kinerja (Excel)</h5>
+            <div class="row align-items-end">
+                <div class="col-md-6">
+                    <label class="form-label small fw-bold">Upload File DRAFT CASCADING (.xlsx):</label>
+                    <input type="file" id="fileExcel" class="form-control" accept=".xlsx, .xls">
+                    <small class="text-muted">Mengupload Excel akan me-reset struktur capaian menjadi kosong
+                        (default).</small>
+                </div>
+                <div class="col-md-6">
+                    <button id="btnProses" class="btn btn-warning fw-bold me-2">Proses & Preview Excel</button>
+                    <button id="btnSimpanBaru" class="btn btn-success fw-bold d-none">Simpan Format Excel ke
+                        Database</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="card p-4 shadow-sm">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h5 class="fw-bold text-primary m-0">Tabel Meta Data Pohon Kinerja</h5>
+                <div class="d-flex gap-2 align-items-center">
+                    <select id="sheetSelector"
+                        class="form-select form-select-sm fw-bold border-primary text-primary d-none"
+                        style="width: 250px; cursor:pointer;">
+                    </select>
+                    <button id="btnDownloadExcel" class="btn btn-sm btn-success fw-bold shadow-sm">📥 Download
+                        Excel</button>
+                    <button id="btnRefresh" class="btn btn-sm btn-outline-primary">Refresh dari Database</button>
+                </div>
+            </div>
+
+            <div class="table-responsive">
+                <table class="table table-bordered align-middle">
+                    <thead class="table-dark text-center sticky-top">
+                        <tr>
+                            <th style="width: 20%;">Uraian Sasaran</th>
+                            <th style="width: 15%;">Indikator & Target</th>
+                            <th style="width: 10%;">Sumber Data</th>
+                            <th style="width: 10%;">PIC</th>
+                            <th style="width: 11%;">Capaian TW 1</th>
+                            <th style="width: 11%;">Bukti Dukung (Link/Teks)</th>
+                            <th style="width: 11%;">Analisis Keberhasilan/Kegagalan</th>
+                            <th style="width: 12%;">Rekomendasi/Solusi</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tabelMetaData">
+                        <tr>
+                            <td colspan="8" class="text-center py-4">Memuat data dari database...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- POP UP MODAL UNTUK EDIT/ISI DATA -->
+    <div class="modal fade" id="modalInputData" tabindex="-1" aria-hidden="true" data-bs-backdrop="static">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header bg-danger text-white">
+                    <h5 class="modal-title" id="modalTitle">Edit Data (Admin)</h5>
+                    <button type="button" class="btn-close btn-close-white" onclick="batalEdit()"
+                        aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <label class="form-label fw-bold" id="modalLabel">Teks:</label>
+                    <textarea id="modalTextarea" class="form-control" rows="5"
+                        placeholder="Ketikkan data di sini..."></textarea>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" onclick="batalEdit()">Batal</button>
+                    <button type="button" class="btn btn-success fw-bold" onclick="simpanEdit()">💾 Simpan
+                        (Auto-Save)</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+        import { getFirestore, doc, setDoc, getDoc, onSnapshot, runTransaction } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyDTx_0nd6vz4ptWSI02mMCsKK0ZTeLSF_Q",
+            authDomain: "sistem-tu-c58ee.firebaseapp.com",
+            projectId: "sistem-tu-c58ee",
+            storageBucket: "sistem-tu-c58ee.firebasestorage.app",
+            messagingSenderId: "844322733823",
+            appId: "1:844322733823:web:73d71d3d083633f5a716ca"
+        };
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+
+        let parsedData = {};
+        let flatNodes = [];
+        let isEditMode = false;
+        let pendingDataUpdate = null;
+
+        let myModal = null;
+        let currentEdit = {
+            nodeIdx: null, fieldName: null, itemIdx: null, isNew: false, originalText: ""
+        };
+
+        document.addEventListener("DOMContentLoaded", () => {
+            const modalEl = document.getElementById('modalInputData');
+            myModal = new bootstrap.Modal(modalEl);
+
+            modalEl.addEventListener('hidden.bs.modal', () => {
+                if (pendingDataUpdate) {
+                    terapkanDataRealtime(pendingDataUpdate);
+                    pendingDataUpdate = null;
+                }
+            });
+
+            const userData = localStorage.getItem('userTU');
+            if (!userData) {
+                alert("Silakan login terlebih dahulu.");
+                window.location.href = "index.html";
+                return;
+            }
+            const user = JSON.parse(userData);
+            document.getElementById('displayRole').innerText = user.role;
+
+            if (user.role !== "Admin" && user.role !== "Kepala Stasiun") {
+                alert("Anda tidak memiliki akses ke halaman ini.");
+                window.location.href = "index.html";
+                return;
+            }
+
+            window.isKepstaUser = (user.role === "Kepala Stasiun");
+
+            if (window.isKepstaUser) {
+                const btnProses = document.getElementById('btnProses');
+                const fileExcel = document.getElementById('fileExcel');
+                if (fileExcel) fileExcel.closest('.card').classList.add('d-none');
+                if (btnProses) btnProses.classList.add('d-none');
+            }
+
+            muatDariDatabase();
+        });
+
+        function setupSheetSelector(sheetNames) {
+            const sel = document.getElementById('sheetSelector');
+            sel.innerHTML = "";
+            sheetNames.forEach(sn => {
+                const opt = document.createElement('option');
+                opt.value = sn;
+                opt.textContent = "📂 Sheet: " + sn;
+                sel.appendChild(opt);
+            });
+            sel.classList.remove('d-none');
+
+            const lastSheet = localStorage.getItem('lastMetaSheet');
+            if (lastSheet && sheetNames.includes(lastSheet)) {
+                sel.value = lastSheet;
+            }
+
+            sel.onchange = (e) => {
+                const chosenSheet = e.target.value;
+                localStorage.setItem('lastMetaSheet', chosenSheet);
+                renderPohonKinerja(parsedData[chosenSheet]);
+            };
+        }
+
+        document.getElementById('btnProses').addEventListener('click', () => {
+            const fileInput = document.getElementById('fileExcel');
+            if (!fileInput.files.length) {
+                alert("Pilih file excel terlebih dahulu!");
+                return;
+            }
+            const file = fileInput.files[0];
+            const reader = new FileReader();
+
+            reader.onload = function (e) {
+                const data = new Uint8Array(e.target.result);
+                const workbook = XLSX.read(data, { type: 'array' });
+                parsedData = {};
+                isEditMode = false;
+
+                workbook.SheetNames.forEach(sheetName => {
+                    const namaUpper = sheetName.toUpperCase();
+                    if (
+                        namaUpper.includes("PK") || namaUpper.includes("MATRIKS") ||
+                        namaUpper.replace(/\s+/g, '') === "SHEET1" ||
+                        namaUpper.replace(/\s+/g, '') === "SHEET2" || namaUpper === "PU"
+                    ) return;
+
+                    const worksheet = workbook.Sheets[sheetName];
+                    const rows = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: "" });
+
+                    let sheetTree = [];
+                    let currentSarkeg = null;
+                    let currentSarkom = null;
+
+                    for (let i = 0; i < rows.length; i++) {
+                        const row = rows[i];
+                        let rawSarkeg = row[3] ? row[3].toString().trim() : "";
+                        let rawSarkom = row[26] ? row[26].toString().trim() : "";
+                        let isTeknik = namaUpper.includes("TEKNIK") || namaUpper.includes("UMUM");
+                        let idxSarak = isTeknik ? 49 : 48;
+                        let rawSarak = row[idxSarak] ? row[idxSarak].toString().trim() : "";
+
+                        const sKegLower = rawSarkeg.toLowerCase();
+                        const sKomLower = rawSarkom.toLowerCase();
+                        const sAkLower = rawSarak.toLowerCase();
+
+                        if (sKegLower === "sasaran kegiatan" || sKegLower === "d" || sKegLower === "sasaran strategis") continue;
+                        if (sKomLower === "sasaran komponen") continue;
+                        if (sAkLower === "sasaran aktivitas") continue;
+
+                        if (!rawSarkeg && !rawSarkom && !rawSarak) continue;
+
+                        if (rawSarkeg) {
+                            currentSarkeg = {
+                                jenis: 'Kegiatan', sasaran: rawSarkeg, indikator: row[4] ? row[4].toString().trim() : "",
+                                satuan: row[10] ? row[10].toString().trim() : "", target: row[11] ? row[11].toString().trim() : "",
+                                sumberData: row[9] ? row[9].toString().trim() : "", pic: row[24] ? row[24].toString().trim() : "",
+                                capaianTW1: [], buktiDukung: [], analisisKeberhasilan: [],
+                                rekomendasi: [], analisisKegagalan: [], solusi: [], children: []
+                            };
+                            sheetTree.push(currentSarkeg);
+                            currentSarkom = null;
+                        }
+
+                        if (rawSarkom) {
+                            currentSarkom = {
+                                jenis: 'Komponen', sasaran: rawSarkom, indikator: row[27] ? row[27].toString().trim() : "",
+                                satuan: row[33] ? row[33].toString().trim() : "", target: row[34] ? row[34].toString().trim() : "",
+                                sumberData: row[32] ? row[32].toString().trim() : "", pic: row[47] ? row[47].toString().trim() : "",
+                                capaianTW1: [], buktiDukung: [], analisisKeberhasilan: [],
+                                rekomendasi: [], analisisKegagalan: [], solusi: [], children: []
+                            };
+                            if (currentSarkeg) currentSarkeg.children.push(currentSarkom);
+                            else sheetTree.push(currentSarkom);
+                        }
+
+                        if (rawSarak) {
+                            let idxIndikatorAk = isTeknik ? 50 : 49;
+                            let idxSatuanAk = isTeknik ? 56 : 55;
+                            let idxTargetAk = isTeknik ? 57 : 56;
+                            let idxSumberDataAk = isTeknik ? 55 : 54;
+                            let idxPicAk = isTeknik ? 70 : 69;
+                            let sarak = {
+                                jenis: 'Aktivitas', sasaran: rawSarak, indikator: row[idxIndikatorAk] ? row[idxIndikatorAk].toString().trim() : "",
+                                satuan: row[idxSatuanAk] ? row[idxSatuanAk].toString().trim() : "", target: row[idxTargetAk] ? row[idxTargetAk].toString().trim() : "",
+                                sumberData: row[idxSumberDataAk] ? row[idxSumberDataAk].toString().trim() : "", pic: row[idxPicAk] ? row[idxPicAk].toString().trim() : "",
+                                capaianTW1: [], buktiDukung: [], analisisKeberhasilan: [],
+                                rekomendasi: [], analisisKegagalan: [], solusi: []
+                            };
+                            if (currentSarkom) currentSarkom.children.push(sarak);
+                            else if (currentSarkeg) currentSarkeg.children.push(sarak);
+                            else sheetTree.push(sarak);
+                        }
+                    }
+                    if (sheetTree.length > 0) parsedData[sheetName] = sheetTree;
+                });
+
+                const validSheetNames = Object.keys(parsedData);
+                if (validSheetNames.length > 0) {
+                    setupSheetSelector(validSheetNames);
+                    renderPohonKinerja(parsedData[validSheetNames[0]]);
+                    document.getElementById('btnSimpanBaru').classList.remove('d-none');
+                    alert(`Berhasil mengekstrak hirarki pohon kinerja. Silakan simpan untuk memperbarui database.`);
+                } else {
+                    alert("Tidak ada data hirarki valid yang ditemukan.");
+                }
+            };
+            reader.readAsArrayBuffer(file);
+        });
+
+        window.openModal = (nodeIdx, fieldName, itemIdx, isNew) => {
+            currentEdit = { nodeIdx, fieldName, itemIdx, isNew, originalText: "" };
+            const txtArea = document.getElementById('modalTextarea');
+            if (isNew) {
+                txtArea.value = "";
+                document.getElementById('modalTitle').innerText = "Tambah Data Baru (Admin)";
+            } else {
+                const text = flatNodes[nodeIdx][fieldName][itemIdx].text;
+                currentEdit.originalText = text;
+                txtArea.value = text;
+                document.getElementById('modalTitle').innerText = "Edit Data (Admin)";
+            }
+            myModal.show();
+        };
+
+        window.batalEdit = () => {
+            const txtArea = document.getElementById('modalTextarea');
+            if (txtArea.value !== currentEdit.originalText) {
+                if (!confirm("Anda memiliki perubahan yang belum disimpan. Yakin ingin membatalkan?")) {
+                    return;
+                }
+            }
+            myModal.hide();
+        };
+
+        // ====== TRANSAKSI DIPERKUAT: SMART LOCK ANTI TABRAKAN ======
+        // ====== TRANSAKSI DIPERKUAT: SMART LOCK ANTI TABRAKAN ======
+        window.simpanEdit = async () => {
+            const txtArea = document.getElementById('modalTextarea');
+            const btnSimpan = document.querySelector('#modalInputData .btn-success');
+            const val = txtArea.value.trim(); // Tambahkan .trim() untuk menghapus spasi berlebih
+            const { nodeIdx, fieldName, itemIdx, isNew } = currentEdit;
+            const currentSheet = document.getElementById('sheetSelector').value;
+
+            // VALIDASI: Cegah penyimpanan data kosong
+            if (val === "") {
+                alert("⚠️ Teks tidak boleh kosong! Jika Anda ingin mengosongkan data, silakan gunakan tombol Hapus (🗑).");
+                return;
+            }
+
+            const originalBtnText = btnSimpan.innerHTML;
+            btnSimpan.innerHTML = "💾 Menyimpan... ⏳";
+            btnSimpan.disabled = true;
+
+            try {
+                const docRef = doc(db, "sistem_setting", "cascading_data");
+
+                await runTransaction(db, async (transaction) => {
+                    const sfDoc = await transaction.get(docRef);
+                    if (!sfDoc.exists()) throw new Error("DOKUMEN_TIDAK_ADA");
+
+                    let serverData = sfDoc.data();
+                    let currentSheetData = serverData.sheets[currentSheet];
+
+                    let serverFlatNodes = [];
+                    function traverse(node) {
+                        serverFlatNodes.push(node);
+                        if (node.children && node.children.length > 0) {
+                            node.children.forEach(traverse);
+                        }
+                    }
+                    currentSheetData.forEach(traverse);
+
+                    let targetNode = serverFlatNodes[nodeIdx];
+                    if (!targetNode[fieldName]) targetNode[fieldName] = [];
+
+                    if (isNew) {
+                        // JIKA MENGISI DATA BARU
+                        if (targetNode.jenis !== 'Kegiatan') { // Tipe Single Field
+                            if (targetNode[fieldName].length > 0) {
+                                // FIX BUG: Jika data di server ternyata string kosong (bug lama), timpa saja!
+                                if (targetNode[fieldName][0].text.trim() === "") {
+                                    targetNode[fieldName][0].text = val;
+                                    targetNode[fieldName][0].author = "Admin";
+                                } else {
+                                    // Jika benar-benar ada isinya, baru deteksi tabrakan
+                                    throw new Error("KEDULUAN_ORANG_LAIN");
+                                }
+                            } else {
+                                targetNode[fieldName].push({ id: Date.now().toString(), text: val, author: "Admin" });
+                            }
+                        } else { // Tipe Multi Field
+                            targetNode[fieldName].push({
+                                id: Date.now().toString() + Math.random().toString(), text: val, author: "Admin"
+                            });
+                        }
+                    } else {
+                        // JIKA EDIT DATA YANG SUDAH ADA
+                        if (targetNode[fieldName][itemIdx]) {
+                            targetNode[fieldName][itemIdx].text = val;
+                            targetNode[fieldName][itemIdx].author = "Admin";
+                        } else {
+                            targetNode[fieldName].push({
+                                id: Date.now().toString() + Math.random().toString(), text: val, author: "Admin"
+                            });
+                        }
+                    }
+
+                    transaction.update(docRef, {
+                        [`sheets.${currentSheet}`]: currentSheetData,
+                        last_updated: new Date().toISOString()
+                    });
+                });
+
+                myModal.hide();
+            } catch (err) {
+                if (err.message === "KEDULUAN_ORANG_LAIN") {
+                    alert("⚠️ GAGAL MENYIMPAN: Baris ini ternyata baru saja diisi oleh pengguna lain! \n\nHalaman akan diperbarui otomatis agar Anda bisa melihat datanya.");
+                    myModal.hide();
+                    if (pendingDataUpdate) {
+                        terapkanDataRealtime(pendingDataUpdate);
+                        pendingDataUpdate = null;
+                    }
+                } else {
+                    console.error("Gagal transaksi:", err);
+                    alert("Gagal menyimpan ke database! Koneksi terputus.");
+                }
+            } finally {
+                btnSimpan.innerHTML = originalBtnText;
+                btnSimpan.disabled = false;
+            }
+        };
+        window.removeArrayItem = async (nodeIdx, fieldName, itemIdx) => {
+            if (confirm('Apakah Anda yakin ingin menghapus data ini secara permanen?')) {
+                const currentSheet = document.getElementById('sheetSelector').value;
+                try {
+                    const docRef = doc(db, "sistem_setting", "cascading_data");
+                    await runTransaction(db, async (transaction) => {
+                        const sfDoc = await transaction.get(docRef);
+                        if (!sfDoc.exists()) throw "Dokumen tidak ditemukan!";
+
+                        let serverData = sfDoc.data();
+                        let currentSheetData = serverData.sheets[currentSheet];
+
+                        let serverFlatNodes = [];
+                        function traverse(node) {
+                            serverFlatNodes.push(node);
+                            if (node.children && node.children.length > 0) {
+                                node.children.forEach(traverse);
+                            }
+                        }
+                        currentSheetData.forEach(traverse);
+
+                        let targetNode = serverFlatNodes[nodeIdx];
+                        if (targetNode && targetNode[fieldName]) {
+                            targetNode[fieldName].splice(itemIdx, 1);
+                        }
+
+                        transaction.update(docRef, {
+                            [`sheets.${currentSheet}`]: currentSheetData,
+                            last_updated: new Date().toISOString()
+                        });
+                    });
+                } catch (err) {
+                    console.error("Gagal hapus:", err);
+                    alert("Gagal menghapus data.");
+                }
+            }
+        };
+
+        function renderArrayField(nodeIdx, fieldName, arrayData, allowMulti) {
+            let html = `<div>`;
+            const data = Array.isArray(arrayData) ? arrayData : [];
+
+            if (!allowMulti) {
+                const item = data.length > 0 ? data[0] : null;
+                // FIX UI: Hanya cek apakah 'item' ada, abaikan isi 'item.text' kosong atau tidak
+                if (!item) {
+                    if (!window.isKepstaUser) {
+                        html += `<button class="btn btn-sm btn-outline-danger py-0 w-100" style="font-size: 0.7rem;" onclick="openModal(${nodeIdx}, '${fieldName}', 0, true)">✎ Isi Data</button>`;
+                    } else {
+                        html += `<span class="text-muted fst-italic" style="font-size: 0.7rem;">(Belum ada data)</span>`;
+                    }
+                } else {
+                    html += `<div class="entry-box">
+                        <div class="mb-1 text-muted" style="font-size: 0.65rem;"><span class="badge bg-secondary">✏️ ${item.author}</span></div>
+                        <div class="mb-1">${item.text || '<em>(Data kosong, silakan edit/hapus)</em>'}</div>`;
+                    if (!window.isKepstaUser) {
+                        html += `<div class="d-flex gap-1 mt-1">
+                            <button class="btn btn-sm btn-outline-danger py-0 flex-grow-1" style="font-size: 0.7rem;" onclick="openModal(${nodeIdx}, '${fieldName}', 0, false)">✎ Edit</button>
+                            <button class="btn btn-sm btn-outline-danger py-0" style="font-size: 0.7rem;" onclick="removeArrayItem(${nodeIdx}, '${fieldName}', 0)">🗑</button>
+                        </div>`;
+                    }
+                    html += `</div>`;
+                }
+                html += `</div>`;
+                return html;
+            }
+
+            data.forEach((item, itemIdx) => {
+                const badgeClass = item.author === 'Admin' ? 'bg-danger' : 'bg-secondary';
+                html += `<div class="entry-box">
+                    <div class="d-flex justify-content-between align-items-center mb-1">
+                        <span class="badge ${badgeClass}">${item.author}</span>`;
+                if (!window.isKepstaUser) {
+                    html += `<div>
+                            <button class="btn btn-sm btn-outline-danger py-0 px-1" style="font-size: 0.6rem;" onclick="openModal(${nodeIdx}, '${fieldName}', ${itemIdx}, false)">✎</button>
+                            <button class="btn btn-sm btn-outline-danger py-0 px-1" style="font-size: 0.6rem;" onclick="removeArrayItem(${nodeIdx}, '${fieldName}', ${itemIdx})">🗑</button>
+                        </div>`;
+                }
+                html += `</div>
+                    <div>${item.text || '<em>(Data kosong, silakan edit/hapus)</em>'}</div>
+                </div>`;
+            });
+
+            if (!window.isKepstaUser) {
+                html += `<button class="btn btn-sm btn-outline-danger py-0 w-100 mt-1" style="font-size: 0.7rem;" onclick="openModal(${nodeIdx}, '${fieldName}', null, true)">+ Tambah (Admin)</button>`;
+            }
+            html += `</div>`;
+            return html;
+        }
+        function renderPohonKinerja(treeArray) {
+            const tbody = document.getElementById('tabelMetaData');
+            tbody.innerHTML = "";
+            flatNodes = [];
+
+            if (!treeArray || treeArray.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="8" class="text-center py-4">Tidak ada data di sheet ini.</td></tr>';
+                return;
+            }
+
+            treeArray.forEach(node => renderNode(node, 0, tbody));
+        }
+
+        function renderNode(node, level, tbody) {
+            const tr = document.createElement('tr');
+            const idx = flatNodes.length;
+            flatNodes.push(node);
+
+            ['capaianTW1', 'buktiDukung', 'analisisKeberhasilan', 'analisisKegagalan', 'rekomendasi', 'solusi'].forEach(f => {
+                if (!Array.isArray(node[f])) {
+                    if (node[f] && typeof node[f] === 'string' && node[f].trim() !== '') {
+                        node[f] = [{ id: Date.now().toString(), text: node[f], author: 'Unknown' }];
+                    } else {
+                        node[f] = [];
+                    }
+                }
+            });
+
+            let paddingLeft = 15 + (level * 40);
+            let badge = "";
+            let rowClass = "";
+            let borderLeft = level > 0 ? "3px solid #b2bec3" : "none";
+            let allowMulti = false;
+
+            if (node.jenis === 'Kegiatan') {
+                badge = '<span class="badge bg-primary mb-2">📌 Sasaran Kegiatan</span><br>';
+                rowClass = "row-kegiatan"; allowMulti = true;
+            } else if (node.jenis === 'Komponen') {
+                badge = '<span class="badge bg-success mb-2">🔹 Sasaran Komponen</span><br>';
+                rowClass = "row-komponen"; allowMulti = false;
+            } else if (node.jenis === 'Aktivitas') {
+                badge = '<span class="badge bg-warning text-dark mb-2">🔸 Sasaran Aktivitas</span><br>';
+                rowClass = "row-aktivitas"; allowMulti = false;
+            }
+
+            tr.className = rowClass;
+            tr.innerHTML = `
+                <td style="padding-left: ${paddingLeft}px; border-left: ${borderLeft}; position: relative;">
+                    ${badge} <span class="fw-bold text-dark">${node.sasaran}</span>
+                </td>
+                <td>
+                    <small class="text-secondary d-block mb-1"><b>Indikator:</b> ${node.indikator || '-'}</small>
+                    <small class="text-primary d-block"><b>Target:</b> ${node.target || '-'} ${node.satuan || ''}</small>
+                </td>
+                <td><small>${node.sumberData || '-'}</small></td>
+                <td><small>${node.pic || '-'}</small></td>
+                <td>${renderArrayField(idx, 'capaianTW1', node.capaianTW1, allowMulti)}</td>
+                <td>${renderArrayField(idx, 'buktiDukung', node.buktiDukung, allowMulti)}</td>
+                <td>
+                    <div class="mb-2 border-bottom pb-2"><b>Keberhasilan:</b><br>${renderArrayField(idx, 'analisisKeberhasilan', node.analisisKeberhasilan, allowMulti)}</div>
+                    <div><b>Kegagalan:</b><br>${renderArrayField(idx, 'analisisKegagalan', node.analisisKegagalan, allowMulti)}</div>
+                </td>
+                <td>
+                    <div class="mb-2 border-bottom pb-2"><b>Rekomendasi:</b><br>${renderArrayField(idx, 'rekomendasi', node.rekomendasi, allowMulti)}</div>
+                    <div><b>Solusi:</b><br>${renderArrayField(idx, 'solusi', node.solusi, allowMulti)}</div>
+                </td>
+            `;
+            tbody.appendChild(tr);
+
+            if (node.children && node.children.length > 0) {
+                node.children.forEach(child => renderNode(child, level + 1, tbody));
+            }
+        }
+
+        document.getElementById('btnSimpanBaru').addEventListener('click', async () => {
+            const btn = document.getElementById('btnSimpanBaru');
+            const originalText = btn.innerHTML;
+            btn.innerHTML = "Menyimpan... ⏳";
+            btn.disabled = true;
+
+            try {
+                await setDoc(doc(db, "sistem_setting", "cascading_data"), {
+                    sheets: parsedData,
+                    last_updated: new Date().toISOString()
+                });
+                alert("Berhasil! Format Excel Kinerja telah disimpan.");
+                btn.classList.add('d-none');
+                isEditMode = true;
+            } catch (error) {
+                console.error("Gagal menyimpan:", error);
+                alert("Terjadi kesalahan saat menyimpan data ke database.");
+            } finally {
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+            }
+        });
+
+        function terapkanDataRealtime(newData) {
+            parsedData = newData;
+            isEditMode = true;
+            const sheetNames = Object.keys(parsedData);
+
+            if (sheetNames.length > 0) {
+                if (document.getElementById('sheetSelector').options.length === 0) {
+                    setupSheetSelector(sheetNames);
+                }
+                const lastSheet = localStorage.getItem('lastMetaSheet');
+                const sheetToRender = (lastSheet && sheetNames.includes(lastSheet)) ? lastSheet : sheetNames[0];
+
+                document.getElementById('sheetSelector').value = sheetToRender;
+                renderPohonKinerja(parsedData[sheetToRender]);
+                document.getElementById('btnSimpanBaru').classList.add('d-none');
+            } else {
+                document.getElementById('tabelMetaData').innerHTML = '<tr><td colspan="8" class="text-center py-4 text-warning">Data sheet di database kosong.</td></tr>';
+            }
+        }
+
+        async function muatDariDatabase() {
+            const tbody = document.getElementById('tabelMetaData');
+            tbody.innerHTML = '<tr><td colspan="8" class="text-center py-4">Memuat data dari database... ⏳</td></tr>';
+
+            const docRef = doc(db, "sistem_setting", "cascading_data");
+
+            onSnapshot(docRef, (docSnap) => {
+                if (docSnap.exists() && docSnap.data().sheets) {
+                    const isModalOpen = document.getElementById('modalInputData').classList.contains('show');
+                    const newData = docSnap.data().sheets;
+
+                    if (isModalOpen) {
+                        pendingDataUpdate = newData;
+                        return;
+                    }
+                    terapkanDataRealtime(newData);
+                } else {
+                    tbody.innerHTML = '<tr><td colspan="8" class="text-center py-4 text-danger">Belum ada data di database. Silakan upload file Excel terlebih dahulu.</td></tr>';
+                    document.getElementById('sheetSelector').classList.add('d-none');
+                }
+            }, (error) => {
+                console.error("Gagal memuat snapshot:", error);
+                tbody.innerHTML = '<tr><td colspan="8" class="text-center py-4 text-danger">Terjadi kesalahan koneksi ke database.</td></tr>';
+            });
+        }
+        document.getElementById('btnRefresh').addEventListener('click', muatDariDatabase);
+        // =========================================================
+        // FITUR DOWNLOAD EXCEL
+        // =========================================================
+        document.getElementById('btnDownloadExcel').addEventListener('click', () => {
+            // Pastikan data tersedia sebelum didownload
+            if (!parsedData || Object.keys(parsedData).length === 0) {
+                alert("Tidak ada data untuk didownload!");
+                return;
+            }
+
+            const btnDownload = document.getElementById('btnDownloadExcel');
+            const originalText = btnDownload.innerHTML;
+            btnDownload.innerHTML = "📥 Memproses... ⏳";
+            btnDownload.disabled = true;
+
+            try {
+                // Inisialisasi Workbook baru menggunakan SheetJS
+                const wb = XLSX.utils.book_new();
+
+                // Fungsi bantuan untuk mengubah array/objek menjadi teks dengan baris baru (enter)
+                const formatArrayToText = (arr) => {
+                    if (!Array.isArray(arr) || arr.length === 0) return "-";
+                    return arr.map(item => `[${item.author}]: ${item.text}`).join("\n");
+                };
+
+                // Proses setiap Sheet yang ada di parsedData
+                for (const sheetName in parsedData) {
+                    const treeData = parsedData[sheetName];
+
+                    // Siapkan Header Baris Excel (Disesuaikan dengan logika kolom berjenjang)
+                    const wsData = [
+                        [
+                            "Jenis Sasaran",
+                            "Uraian Kegiatan",  // Kolom B
+                            "Uraian Komponen",  // Kolom C
+                            "Uraian Aktivitas", // Kolom D
+                            "Indikator",
+                            "Satuan",
+                            "Target",
+                            "Sumber Data",
+                            "PIC",
+                            "Capaian TW 1",
+                            "Bukti Dukung",
+                            "Analisis Keberhasilan",
+                            "Analisis Kegagalan",
+                            "Rekomendasi",
+                            "Solusi"
+                        ]
+                    ];
+
+                    // Fungsi rekursif untuk membaca tree hierarchy
+                    function extractNode(node) {
+                        let colKegiatan = "";
+                        let colKomponen = "";
+                        let colAktivitas = "";
+
+                        // Logika pemisahan kolom berdasarkan Jenis Sasaran
+                        if (node.jenis === 'Kegiatan') {
+                            colKegiatan = node.sasaran || "-";
+                        } else if (node.jenis === 'Komponen') {
+                            colKomponen = node.sasaran || "-";
+                        } else if (node.jenis === 'Aktivitas') {
+                            colAktivitas = node.sasaran || "-";
+                        } else {
+                            colKegiatan = node.sasaran || "-"; // Fallback
+                        }
+
+                        wsData.push([
+                            node.jenis || "-",
+                            colKegiatan,       // Masuk ke Kolom B
+                            colKomponen,       // Masuk ke Kolom C
+                            colAktivitas,      // Masuk ke Kolom D
+                            node.indikator || "-",
+                            node.satuan || "-",
+                            node.target || "-",
+                            node.sumberData || "-",
+                            node.pic || "-",
+                            formatArrayToText(node.capaianTW1),
+                            formatArrayToText(node.buktiDukung),
+                            formatArrayToText(node.analisisKeberhasilan),
+                            formatArrayToText(node.analisisKegagalan),
+                            formatArrayToText(node.rekomendasi),
+                            formatArrayToText(node.solusi)
+                        ]);
+
+                        // Jika punya anak (children), ekstrak juga
+                        if (node.children && node.children.length > 0) {
+                            node.children.forEach(child => extractNode(child));
+                        }
+                    }
+
+                    // Mulai ekstrak dari node teratas
+                    treeData.forEach(rootNode => extractNode(rootNode));
+
+                    // Buat worksheet dari array wsData
+                    const ws = XLSX.utils.aoa_to_sheet(wsData);
+
+                    // Atur lebar kolom (Disesuaikan dengan penambahan kolom baru)
+                    ws['!cols'] = [
+                        { wch: 15 }, // A: Jenis Sasaran
+                        { wch: 40 }, // B: Uraian Kegiatan
+                        { wch: 40 }, // C: Uraian Komponen
+                        { wch: 40 }, // D: Uraian Aktivitas
+                        { wch: 30 }, // E: Indikator
+                        { wch: 10 }, // F: Satuan
+                        { wch: 10 }, // G: Target
+                        { wch: 20 }, // H: Sumber Data
+                        { wch: 20 }, // I: PIC
+                        { wch: 35 }, // J: Capaian
+                        { wch: 35 }, // K: Bukti
+                        { wch: 35 }, // L: Keberhasilan
+                        { wch: 35 }, // M: Kegagalan
+                        { wch: 35 }, // N: Rekomendasi
+                        { wch: 35 }  // O: Solusi
+                    ];
+
+                    // Tambahkan ke workbook
+                    XLSX.utils.book_append_sheet(wb, ws, sheetName);
+                }
+
+                // Dapatkan tanggal hari ini untuk nama file
+                const dateStr = new Date().toISOString().slice(0, 10);
+
+                // Simpan & Download
+                XLSX.writeFile(wb, `Rekap_Meta_Data_TU_${dateStr}.xlsx`);
+
+            } catch (err) {
+                console.error("Gagal mendownload Excel:", err);
+                alert("Terjadi kesalahan saat memproses file Excel.");
+            } finally {
+                btnDownload.innerHTML = originalText;
+                btnDownload.disabled = false;
+            }
+        });    
+    </script>
+</body>
+
+</html>

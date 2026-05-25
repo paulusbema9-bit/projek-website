@@ -1,0 +1,771 @@
+<!DOCTYPE html>
+<html lang="id">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Generator Nota Dinas Umum/Bebas</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.7/pdfmake.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.7/vfs_fonts.js"></script>
+    <script src="gotham-font.js"></script>
+    <script src="logo-tvri.js"></script>
+    <script src="kop-bawah.js"></script>
+    <script src="ttd_ragil.js"></script>
+    <script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tinymce/6.8.3/tinymce.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/html-to-pdfmake/browser.js"></script>
+    <style>
+        /* Sembunyikan notifikasi API Key TinyMCE */
+        .tox-notifications-container { display: none !important; }
+    </style>
+
+    <style>
+        :root {
+            --primary: #2c3e50;
+            --accent: #3498db;
+            --success: #27ae60;
+        }
+
+        body {
+            background-color: #f4f7f6;
+            font-family: 'Segoe UI', sans-serif;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: auto;
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+        }
+
+        h2 {
+            color: var(--primary);
+            font-weight: bold;
+            margin-bottom: 25px;
+            text-align: center;
+            border-bottom: 2px solid #eee;
+            padding-bottom: 15px;
+        }
+
+        .section-title {
+            font-weight: bold;
+            color: var(--accent);
+            margin-top: 20px;
+            margin-bottom: 10px;
+            border-left: 4px solid var(--accent);
+            padding-left: 10px;
+        }
+
+        .form-label {
+            font-weight: 600;
+            color: #555;
+            font-size: 0.9rem;
+            margin-bottom: 5px;
+            display: block;
+        }
+
+        input,
+        select,
+        textarea {
+            width: 100%;
+            margin-bottom: 15px;
+            padding: 12px;
+            box-sizing: border-box;
+            border: 1px solid #ced4da;
+            border-radius: 6px;
+            font-size: 14px;
+        }
+
+        .grid-input {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+        }
+
+        .btn-primary {
+            background-color: var(--accent);
+            border: none;
+            padding: 16px;
+            color: white;
+            font-weight: bold;
+            border-radius: 8px;
+            cursor: pointer;
+            width: 100%;
+            font-size: 16px;
+        }
+
+        .btn-primary:hover {
+            background-color: #2980b9;
+        }
+
+        .btn-primary:disabled {
+            background-color: #bdc3c7;
+            cursor: not-allowed;
+        }
+
+        .hidden-field {
+            display: none;
+        }
+
+        .footer-note {
+            font-size: 11px;
+            color: #7f8c8d;
+            text-align: center;
+            margin-top: 20px;
+        }
+
+        #statusProses {
+            display: none;
+            text-align: center;
+            margin-top: 10px;
+            font-weight: bold;
+            color: var(--accent);
+        }
+
+        /* Modal Styles */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 9999;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.8);
+        }
+
+        .modal-content {
+            background-color: #fff;
+            margin: 2% auto;
+            padding: 20px;
+            border-radius: 12px;
+            width: 90%;
+            max-width: 1000px;
+            height: 90%;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 5px 30px rgba(0, 0, 0, 0.3);
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #eee;
+        }
+
+        .btn-cancel {
+            background: #95a5a6;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+
+        .btn-cancel:hover {
+            background: #7f8c8d;
+        }
+
+        #pdfFrame {
+            width: 100%;
+            flex-grow: 1;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="container">
+        <h2>Nota Dinas Kasubag (Format Bebas) Otomatis</h2>
+
+        <div class="row" style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px; margin-bottom: 15px;">
+            <div>
+                <label class="form-label">No Urut ND</label>
+                <input type="number" id="noUrut" readonly placeholder="Memuat...">
+            </div>
+            <div>
+                <label class="form-label">Kode Klasifikasi</label>
+                <input type="text" id="kodeSurat" placeholder="Contoh: PR.03.02" value="PR.03.02">
+            </div>
+            <div>
+                <label class="form-label">Verifikator Awal</label>
+                <select id="alurAwal" style="margin-bottom: 0;">
+                    <option value="Kasubag TU">Kasubag TU</option>
+                    <option value="PPK 1">PPK 1</option>
+                    <option value="PPK 2">PPK 2</option>
+                </select>
+            </div>
+        </div>
+
+        <label class="form-label">Perihal (Hal)</label>
+        <input type="text" id="hal" placeholder="Perihal (Hal)" value="Permohonan Produksi Program Siaran">
+
+        <div class="row"
+            style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 20px; border: 1px solid #e9ecef;">
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                <div>
+                    <label class="form-label">Sifat Surat:</label>
+                    <div style="display: flex; gap: 15px;">
+                        <label style="font-weight: normal;"><input type="radio" name="sifat" value="Biasa" checked>
+                            Biasa</label>
+                        <label style="font-weight: normal;"><input type="radio" name="sifat" value="Penting">
+                            Penting</label>
+                        <label style="font-weight: normal;"><input type="radio" name="sifat" value="Segera">
+                            Segera</label>
+                        <label style="font-weight: normal;"><input type="radio" name="sifat" value="Rahasia">
+                            Rahasia</label>
+                    </div>
+                </div>
+                <!-- Bagian Surat Tugas dihapus -->
+            </div>
+        </div>
+
+        <div class="section-title">Isi Nota Dinas</div>
+        <textarea id="isiSurat" style="display:none;"></textarea>
+        <div id="isiSuratEditor" style="min-height: 250px;">Ketik isi nota dinas di sini...</div>
+
+        <div class="row"
+            style="background: #e8f4fd; padding: 15px; border-radius: 8px; margin-bottom: 20px; border: 1px solid #d6eaf8;">
+            <label class="form-label" style="color: #2980b9;">Lampiran Tambahan / RAB PDF (Akan digabungkan di
+                akhir):</label>
+            <input type="file" id="lampiranFile" accept=".pdf" style="margin-bottom: 0;">
+        </div>
+
+        <div class="hidden-field">
+            <input type="text" id="tglSurat">
+            <input type="text" id="kepada" value="Kepala TVRI Stasiun Jawa Tengah">
+            <input type="text" id="dari" value="Kepala Sub Bagian Tata Usaha">
+            <input type="text" id="lampiran" value="-">
+            <input type="text" id="jabatanTtd" value="Kepala Sub Bagian Tata Usaha,">
+            <input type="text" id="namaTtd" value="Hendro Ragil Priyanto, S.Kom">
+            <input type="text" id="nipTtd" value="196912281991031004">
+            <input type="text" id="kodeTetap" value="II.3.1">
+        </div>
+
+        <button id="btnSubmit" class="btn-primary" onclick="submitNotaDinas()">LIHAT PREVIEW & KIRIM</button>
+        <div id="statusProses">Sedang memproses...</div>
+        <div class="footer-note">Template otomatis sesuai Standar Nota Dinas Produksi TVRI</div>
+    </div>
+
+    <div id="modalPreview" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 style="margin: 0; color: var(--primary);">Preview Draft Surat</h3>
+            </div>
+            <iframe id="pdfFrame"></iframe>
+            <div style="margin-top: 15px; text-align: right; display: flex; justify-content: flex-end; gap: 15px;">
+                <button onclick="closePreview()" class="btn-cancel" style="background: #e74c3c;">Batal /
+                    Perbaiki</button>
+                <button id="btnLanjutkan" class="btn-primary" style="width: auto; padding: 12px 30px;"
+                    onclick="finalUploadNotaDinas()">Lanjutkan Kirim ke Verifikasi Admin</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        tinymce.init({
+            selector: '#isiSuratEditor',
+            plugins: 'lists table',
+            toolbar: 'undo redo | bold italic underline | bullist numlist | table | alignleft aligncenter alignright alignjustify',
+            menubar: false,
+            height: 300,
+            content_style: 'body { font-family:"Gotham",Helvetica,Arial,sans-serif; font-size:14px; text-align:justify; }',
+            setup: function (editor) {
+                editor.on('change', function () {
+                    editor.save();
+                });
+            }
+        });
+    </script>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+        import { getFirestore, collection, addDoc, getDocs, query, orderBy, getDoc, doc, updateDoc, arrayUnion } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+        import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyDTx_0nd6vz4ptWSI02mMCsKK0ZTeLSF_Q",
+            authDomain: "sistem-tu-c58ee.firebaseapp.com",
+            projectId: "sistem-tu-c58ee",
+            storageBucket: "sistem-tu-c58ee.firebasestorage.app",
+            messagingSenderId: "844322733823",
+            appId: "1:844322733823:web:73d71d3d083633f5a716ca"
+        };
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+        const storage = getStorage(app);
+
+        // Export to window agar bisa dibaca fungsi luar scope module
+        window.db = db;
+        window.storage = storage;
+        window.firebaseOps = { collection, addDoc, getDocs, query, orderBy, ref, uploadBytes, getDownloadURL, getDoc, doc, updateDoc, arrayUnion };
+
+        // --- DETEKSI AUTOMATIS MODE REVISI / EDIT DARI URL ---
+        const urlParams = new URLSearchParams(window.location.search);
+        let editDocId = urlParams.get('editId') || urlParams.get('id'); // Menangkap parameter editId dari dashboard utama
+        window.currentEditId = editDocId;
+
+        // Fetch No Urut ND Utama
+        async function fetchNextNoUrut() {
+            try {
+                const sn = await getDocs(collection(db, "surat_dinas"));
+                let pK = [];
+                sn.forEach(d => {
+                    const v = d.data();
+                    if (v.category === 'ND_KASUBAG') {
+                        if (v.noUrutND && !isNaN(parseInt(v.noUrutND))) pK.push(parseInt(v.noUrutND));
+                    }
+                });
+
+                const getNext = (arr, start) => {
+                    let n = start;
+                    while (arr.includes(n)) n++;
+                    return n;
+                };
+
+                document.getElementById('noUrut').value = getNext(pK, 300);
+            } catch (error) {
+                console.error("Gagal mengambil nomor urut ND:", error);
+            }
+        }
+
+        // Fetch No Urut Surat Tugas
+        async function fetchNextNoUrutST() {
+            const previewField = document.getElementById('noUrutSTPreview');
+            previewField.value = "Memuat...";
+            try {
+                const sn = await getDocs(collection(db, "surat_dinas"));
+                let pT = [];
+                sn.forEach(d => {
+                    const v = d.data();
+                    if (v.noUrutST && v.noUrutST !== "N/A") pT.push(parseInt(v.noUrutST));
+                });
+                const getNext = (arr, start) => {
+                    let n = start;
+                    while (arr.includes(n)) n++;
+                    return n;
+                };
+                const nextST = getNext(pT, 163);
+                previewField.value = nextST;
+                return nextST;
+            } catch (error) {
+                console.error("Gagal ambil No ST:", error);
+                previewField.value = "ERR";
+            }
+        }
+
+        window.fetchNextNoUrut = fetchNextNoUrut;
+        window.fetchNextNoUrutST = fetchNextNoUrutST;
+
+        // --- INITIALISASI OTOMATIS DATA ISIAN FORM ---
+        async function initPage() {
+            if (window.currentEditId) {
+                document.querySelector('h2').innerText = "Revisi Draft Nota Dinas Produksi";
+                document.getElementById('btnSubmit').innerText = "LIHAT PREVIEW & UPDATE REVISI";
+
+                try {
+                    const docSnap = await getDoc(doc(db, "surat_dinas", window.currentEditId));
+                    if (docSnap.exists()) {
+                        const data = docSnap.data();
+
+                        // Kembalikan isian form sesuai data lama sebelum direvisi
+                        document.getElementById('noUrut').value = data.noUrutND || "";
+                        document.getElementById('kodeSurat').value = data.klas || "PR.03.02";
+                        document.getElementById('hal').value = data.perihal || "";
+                        if (document.getElementById('alurAwal')) {
+                            document.getElementById('alurAwal').value = data.alurAwal || "Kasubag TU";
+                        }
+
+                        if (data.sifat) {
+                            const radio = document.querySelector(`input[name="sifat"][value="${data.sifat}"]`);
+                            if (radio) radio.checked = true;
+                        }
+
+                        // Kembalikan isian form bebas jika ada
+                        if (data.isiSurat) {
+                            const editorDiv = document.getElementById('isiSuratEditor');
+                            if(editorDiv) editorDiv.innerHTML = data.isiSurat;
+                            if(tinymce.get('isiSuratEditor')) tinymce.get('isiSuratEditor').setContent(data.isiSurat);
+                        }
+
+                        // Tampilkan status RAB lama jika ada
+                        if (data.linkFileRAB) {
+                            window.currentOldRABUrl = data.linkFileRAB;
+                            const rabLabel = document.querySelector('label[for="lampiranFile"]') || document.getElementById('lampiranFile').parentElement;
+                            if (rabLabel) {
+                                const infoRAB = document.createElement('div');
+                                infoRAB.innerHTML = `<small style="color: #2e7d32; font-weight: bold;">(File RAB sebelumnya sudah tersimpan. Abaikan form ini jika tidak ingin mengubah RAB.)</small>`;
+                                document.getElementById('lampiranFile').parentNode.insertBefore(infoRAB, document.getElementById('lampiranFile').nextSibling);
+                            }
+                        }
+
+                        // Logika Surat Tugas telah dihapus untuk form bebas
+                    }
+                } catch (e) {
+                    console.error("Gagal memuat data lama revisi:", e);
+                }
+            } else {
+                fetchNextNoUrut();
+            }
+        }
+
+        initPage();
+    </script>
+
+    <script>
+        // Variabel global untuk status ST otomatis
+        window.isAutoST = false;
+
+        // Logic Tanggal
+        const today = new Date();
+        const options = { year: 'numeric', month: 'long', day: 'numeric' };
+        document.getElementById('tglSurat').value = today.toLocaleDateString('id-ID', options);
+        const romanMonths = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI', 'XII'];
+        const currentBln = romanMonths[today.getMonth()];
+        const currentThn = today.getFullYear();
+
+        function terbilangIndo(n) {
+            const satuan = ['', 'Satu', 'Dua', 'Tiga', 'Empat', 'Lima', 'Enam', 'Tujuh', 'Delapan', 'Sembilan', 'Sepuluh', 'Sebelas'];
+            if (n < 12) return satuan[n];
+            if (n < 20) return satuan[n - 10] + ' Belas';
+            if (n < 100) return satuan[Math.floor(n / 10)] + ' Puluh ' + satuan[n % 10];
+            return n.toString();
+        }
+
+        let currentPdfBlob = null;
+        let globalCalculatedLampiran = "-";
+
+        async function submitNotaDinas() {
+            const btn = document.getElementById('btnSubmit');
+            const status = document.getElementById('statusProses');
+
+            const halVal = document.getElementById('hal').value.trim();
+            const kodeVal = document.getElementById('kodeSurat').value.trim();
+            const isiHtml = tinymce.get('isiSuratEditor') ? tinymce.get('isiSuratEditor').getContent().trim() : "";
+            
+            if (!halVal || !kodeVal || !isiHtml) return alert("Mohon lengkapi Perihal, Kode Klasifikasi, dan Isi Surat!");
+
+            btn.disabled = true;
+            status.style.display = 'block';
+
+            try {
+                // 1. Generate PDF
+                const blob = await generatePDFBlob();
+                currentPdfBlob = blob;
+
+                // 2. Show Modal & Preview
+                const url = URL.createObjectURL(blob);
+                document.getElementById('pdfFrame').src = url;
+                document.getElementById('modalPreview').style.display = 'block';
+
+            } catch (error) {
+                console.error("Preview error:", error);
+                alert("Gagal membuat preview: " + error.message);
+            } finally {
+                btn.disabled = false;
+                status.style.display = 'none';
+            }
+        }
+
+        function closePreview() {
+            document.getElementById('modalPreview').style.display = 'none';
+            document.getElementById('pdfFrame').src = '';
+        }
+
+        async function finalUploadNotaDinas() {
+            if (!currentPdfBlob) return;
+
+            const btnLanjutkan = document.getElementById('btnLanjutkan');
+            btnLanjutkan.disabled = true;
+            btnLanjutkan.innerText = "Memproses Pengiriman... (Mohon Tunggu)";
+
+            try {
+                // Logika Penomoran Surat Tugas dihapus untuk form bebas
+
+                // 2. Ambil Informasi Identitas Akun
+                const userStr = localStorage.getItem('userTU');
+                const user = userStr ? JSON.parse(userStr) : { id: 'operator_otomatis', nama: 'Operator' };
+
+                const noUrut = document.getElementById('noUrut').value;
+                const sifat = document.querySelector('input[name="sifat"]:checked').value;
+                const hal = document.getElementById('hal').value;
+                const kodeSurat = document.getElementById('kodeSurat').value;
+
+                // ----------------------------------------------------
+                // 🚀 PROSES EXTRAK ND MURNI (ANTI-REVISI COMPRESS) 🚀
+                // ----------------------------------------------------
+                // Menggunakan purePdfBlob yang sudah berisi ND + Auto ST (tanpa lampiran upload manual)
+                const pureNdBlob = window.purePdfBlob;
+
+                // Upload Berkas ND Murni ke Storage
+                const ndFileName = `ND_MURNI_PROD_${Date.now()}.pdf`;
+                const ndStorageRef = window.firebaseOps.ref(window.storage, 'nd_murni/' + ndFileName);
+                await window.firebaseOps.uploadBytes(ndStorageRef, pureNdBlob);
+                const downloadURL_ND_Murni = await window.firebaseOps.getDownloadURL(ndStorageRef);
+
+                // Upload Berkas Utama (Gabungan ND + ST Otomatis + Lampiran Upload) ke Storage
+                const mainFileName = `ND_GABUNGAN_PROD_${Date.now()}.pdf`;
+                const mainStorageRef = window.firebaseOps.ref(window.storage, 'surat/' + mainFileName);
+                await window.firebaseOps.uploadBytes(mainStorageRef, currentPdfBlob);
+                const downloadURL_Utama = await window.firebaseOps.getDownloadURL(mainStorageRef);
+                // ----------------------------------------------------
+
+                const isiSuratStr = tinymce.get('isiSuratEditor') ? tinymce.get('isiSuratEditor').getContent() : "";
+
+                // Upload RAB mentah jika ada lampiranFile
+                let downloadURL_RAB = window.currentOldRABUrl || null;
+                const lampiranFile = document.getElementById('lampiranFile').files[0];
+                if (lampiranFile) {
+                    const rabFileName = `LAMPIRAN_BEBAS_${Date.now()}.pdf`;
+                    const rabStorageRef = window.firebaseOps.ref(window.storage, 'lampiran_rab/' + rabFileName);
+                    await window.firebaseOps.uploadBytes(rabStorageRef, lampiranFile);
+                    downloadURL_RAB = await window.firebaseOps.getDownloadURL(rabStorageRef);
+                }
+
+                const verifikator = document.getElementById('alurAwal') ? document.getElementById('alurAwal').value : 'Kasubag TU';
+                const categoryVal = verifikator.startsWith('PPK') ? 'ND_PPK' : 'ND_KASUBAG';
+
+                // Paket data yang akan dikirim ke Firestore
+                const payload = {
+                    noUrutND: String(noUrut),
+                    perihal: hal,
+                    klas: kodeSurat,
+                    sifat: sifat,
+                    linkFile: downloadURL_Utama,
+                    linkFileAsli: downloadURL_Utama,
+                    linkFileND: downloadURL_ND_Murni,
+                    status: "Menunggu Persetujuan Admin",
+                    lampiran: globalCalculatedLampiran,
+                    jenisRevisi: "Selesai",
+                    isAuto: true,
+                    alurAwal: verifikator,
+                    category: categoryVal,
+                    catatan: "",
+                    isiSurat: isiSuratStr,
+                    noUrutST: "N/A"
+                };
+                if (downloadURL_RAB) payload.linkFileRAB = downloadURL_RAB;
+
+                const targetEditId = window.currentEditId ? String(window.currentEditId).trim() : null;
+
+                if (targetEditId) {
+                    // 🔄 UPDATE DOKUMEN YANG SUDAH ADA
+                    const docRef = window.firebaseOps.doc(window.db, "surat_dinas", targetEditId);
+                    await window.firebaseOps.updateDoc(docRef, {
+                        ...payload,
+                        log: window.firebaseOps.arrayUnion({
+                            st: "Nota Dinas berhasil dikoreksi melalui form generator",
+                            t: new Date().toLocaleString()
+                        })
+                    });
+                    alert("Koreksi berhasil disimpan! Berkas diteruskan kembali ke Verifikasi Admin.");
+                } else {
+                    // ➕ DOKUMEN BARU
+                    await window.firebaseOps.addDoc(window.firebaseOps.collection(window.db, "surat_dinas"), {
+                        ...payload,
+                        noAgenda: "",
+                        category: categoryVal,
+                        kepND: "II.3.1",
+                        namaPic: user.nama || user.id,
+                        pic: user.id,
+                        tgl: new Date(),
+                        alurAwal: verifikator,
+                        log: [{ st: "Nota Dinas Produksi Diterbitkan Otomatis", t: new Date().toLocaleString() }]
+                    });
+                    alert("Nota Dinas baru berhasil dibuat dan diteruskan ke Verifikasi Admin.");
+                }
+
+                btnLanjutkan.innerText = "Selesai! Halaman Dapat Ditutup.";
+                btnLanjutkan.style.backgroundColor = "#27ae60"; // Berubah warna hijau tanda berhasil
+
+                setTimeout(() => {
+                    window.close();
+                }, 500);
+
+            } catch (error) {
+                console.error("Final submission error:", error);
+                alert("Gagal mengirim dokumen: " + error.message);
+                btnLanjutkan.disabled = false;
+                btnLanjutkan.innerText = "Lanjutkan Kirim ke Verifikasi Admin";
+                btnLanjutkan.style.backgroundColor = ""; // Kembalikan warna awal
+            }
+        }
+
+        // window.tambahBarisNama dan window.toggleNamaPegawai dihapus
+
+        async function generatePDFBlob() {
+            let lampiranPageCount = 0;
+            let lampiranArrayBuffer = null;
+            const lampiranFile = document.getElementById('lampiranFile').files[0];
+
+            if (lampiranFile) {
+                lampiranArrayBuffer = await lampiranFile.arrayBuffer();
+            } else if (window.currentOldRABBuffer) {
+                lampiranArrayBuffer = window.currentOldRABBuffer;
+            } else if (window.currentOldRABUrl) {
+                try {
+                    const response = await fetch(window.currentOldRABUrl);
+                    lampiranArrayBuffer = await response.arrayBuffer();
+                    window.currentOldRABBuffer = lampiranArrayBuffer; // cache untuk generate selanjutnya
+                } catch (e) {
+                    console.error("Gagal mendownload RAB lama", e);
+                }
+            }
+
+            if (lampiranArrayBuffer) {
+                try {
+                    const pdfDocL = await PDFLib.PDFDocument.load(lampiranArrayBuffer);
+                    lampiranPageCount += pdfDocL.getPageCount();
+                } catch (err) {
+                    console.error("Gagal baca PDF lampiran:", err);
+                }
+            }
+
+            // Tidak ada penambahan halaman ST karena dihapus
+
+            if (lampiranPageCount > 0) {
+                globalCalculatedLampiran = `${lampiranPageCount} (${terbilangIndo(lampiranPageCount).trim()}) Lembar`;
+            } else {
+                globalCalculatedLampiran = "-";
+            }
+
+            return new Promise((resolve, reject) => {
+                pdfMake.vfs['Gotham-Light.ttf'] = window.gothamLightBase64;
+                const myFonts = { Gotham: { normal: 'Gotham-Light.ttf', bold: 'Gotham-Light.ttf', italics: 'Gotham-Light.ttf', bolditalics: 'Gotham-Light.ttf' } };
+
+                const noUrut = document.getElementById('noUrut').value;
+                const kodeSurat = document.getElementById('kodeSurat').value;
+                const fullNoSurat = `${noUrut}/${kodeSurat}/II.3.1/${currentBln}/${currentThn}`;
+
+                const data = {
+                    noSurat: fullNoSurat,
+                    tgl: document.getElementById('tglSurat').value,
+                    kepada: document.getElementById('kepada').value,
+                    dari: document.getElementById('dari').value,
+                    hal: document.getElementById('hal').value,
+                    sifat: document.querySelector('input[name="sifat"]:checked').value,
+                    lampiran: globalCalculatedLampiran,
+                    jabatanTtd: document.getElementById('jabatanTtd').value,
+                    namaTtd: document.getElementById('namaTtd').value,
+                    nipTtd: document.getElementById('nipTtd').value
+                };
+
+                let isiHtml = tinymce.get('isiSuratEditor').getContent();
+                isiHtml = isiHtml.replace(/font-family\s*:\s*[^;"]*(?:;|$)/gi, '');
+                const isiSuratBlocks = htmlToPdfmake(isiHtml, {
+                    defaultStyles: {
+                        p: { margin: [0, 0, 0, 10], alignment: 'justify' },
+                        table: { margin: [0, 10, 0, 10] },
+                        ol: { margin: [15, 0, 0, 10], alignment: 'justify' },
+                        ul: { margin: [15, 0, 0, 10], alignment: 'justify' }
+                    }
+                });
+
+                let contentPdf = [
+                    { image: logoTVRI, width: 100, absolutePosition: { x: 20, y: 30 } },
+                    {
+                        stack: [
+                            { text: 'NOTA DINAS', alignment: 'center', bold: true, decoration: 'underline' },
+                            { text: 'Nomor: ' + data.noSurat, alignment: 'center', margin: [0, 2, 0, 0] }
+                        ],
+                        margin: [0, -20, 0, 20]
+                    },
+                    {
+                        table: {
+                            widths: [80, 10, '*'],
+                            body: [
+                                [{ text: 'Kepada Yth', bold: true }, ':', data.kepada],
+                                [{ text: 'Dari', bold: true }, ':', data.dari],
+                                [{ text: 'Hal', bold: true }, ':', { text: data.hal, bold: true }],
+                                [{ text: 'Sifat', bold: true }, ':', data.sifat],
+                                [{ text: 'Lampiran', bold: true }, ':', data.lampiran],
+                                [{ text: 'Tanggal', bold: true }, ':', data.tgl]
+                            ]
+                        },
+                        layout: 'noBorders', margin: [0, 0, 0, 15]
+                    },
+                    { canvas: [{ type: 'line', x1: 0, y1: 0, x2: 453.55, y2: 0, lineWidth: 1.5 }], margin: [0, 0, 0, 20] },
+                    { text: 'Dengan hormat,', margin: [0, 0, 0, 10], alignment: 'justify' }
+                ];
+                
+                contentPdf = contentPdf.concat(isiSuratBlocks);
+
+                // Logika kalimat lampiran KAK dan RAB dihapus untuk form bebas
+
+                contentPdf.push(
+                    { text: 'Demikian permohonan ini kami sampaikan, atas perhatiannya kami mengucapkan terima kasih.', margin: [0, 0, 0, 40], alignment: 'justify' },
+                    {
+                        columns: [
+                            { text: '', width: '*' },
+                            {
+                                stack: [
+                                    { text: 'Semarang, ' + data.tgl, margin: [0, 0, 0, 5] },
+                                    { text: data.jabatanTtd, bold: true },
+                                    { image: 'data:image/png;base64,' + ttdkasubagBase64, width: 140, margin: [0, 5, 0, 5] },
+                                    { text: data.namaTtd, bold: true, decoration: 'underline' },
+                                    { text: 'NIP. ' + data.nipTtd }
+                                ],
+                                width: 200, alignment: 'left'
+                            }
+                        ]
+                    }
+                );
+
+                // Logika Pembuatan ST telah dihapus
+
+                const docDefinition = {
+                    pageSize: 'A4',
+                    pageMargins: [85.04, 113.38, 56.69, 90],
+                    defaultStyle: { font: 'Gotham', fontSize: 10, line_height: 1.2 },
+                    footer: function (currentPage, pageCount) {
+                        // Sembunyikan footer untuk halaman 3 (Lampiran) dan seterusnya
+                        if (currentPage >= 3) {
+                            return null;
+                        }
+
+                        return {
+                            image: 'data:image/png;base64,' + KopBawahBase64,
+                            width: 595, alignment: 'center', margin: [0, 15, 0, 0]
+                        };
+                    },
+                    content: contentPdf
+                };
+
+                const pdfDocGenerator = pdfMake.createPdf(docDefinition, null, myFonts);
+                const lampiranFile = document.getElementById('lampiranFile').files[0];
+
+                pdfDocGenerator.getBuffer(async (buffer) => {
+                    try {
+                        let finalPdfBytes = buffer;
+
+                        // Simpan versi murni (tanpa lampiran upload manual) untuk kebutuhan revisi
+                        window.purePdfBlob = new Blob([buffer], { type: 'application/pdf' });
+
+                        if (lampiranArrayBuffer) {
+                            const mainPdfDoc = await PDFLib.PDFDocument.load(buffer);
+                            const attachmentPdfDoc = await PDFLib.PDFDocument.load(lampiranArrayBuffer);
+                            const copiedPages = await mainPdfDoc.copyPages(attachmentPdfDoc, attachmentPdfDoc.getPageIndices());
+                            copiedPages.forEach((page) => mainPdfDoc.addPage(page));
+                            finalPdfBytes = await mainPdfDoc.save();
+                        }
+                        resolve(new Blob([finalPdfBytes], { type: 'application/pdf' }));
+                    } catch (err) {
+                        reject(err);
+                    }
+                });
+            });
+        }
+    </script>
+
+</body>
+
+</html>

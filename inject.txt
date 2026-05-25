@@ -1,0 +1,187 @@
+
+        // --- FUNGSI REGENERATE PDF DISPOSISI KHUSUS ---
+        window.regeneratePDFDisposisi = async (id) => {
+            if (!confirm("Apakah Anda yakin ingin menggambar ulang PDF Disposisi ini untuk memperbaiki tanggal/tampilannya?")) return;
+            
+            const suratSaatIni = window.globalSemuaSurat.find(s => s.id === id);
+            if (!suratSaatIni) return alert("Data surat tidak ditemukan!");
+
+            const urlPdfAsli = suratSaatIni.linkFileAsli || suratSaatIni.linkFile;
+            if (!urlPdfAsli) return alert("File surat asli tidak ditemukan. Tidak dapat membuat ulang PDF Disposisi.");
+
+            // Buat overlay loading sederhana
+            const loadingDiv = document.createElement("div");
+            loadingDiv.innerHTML = "<div style='position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:9999;display:flex;justify-content:center;align-items:center;'><h3 class='text-white fw-bold'>⏳ Menggambar Ulang PDF...</h3></div>";
+            document.body.appendChild(loadingDiv);
+
+            try {
+                const dO = suratSaatIni.tgl ? suratSaatIni.tgl.toDate() : new Date();
+                const bl = ["I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X", "XI", "XII"][dO.getMonth()];
+                let nmND = (suratSaatIni.category === 'ND_KEPSTA' || suratSaatIni.category === 'SK_KEPSTA') ? (suratSaatIni.noUrutNDKepsta || suratSaatIni.noUrutND) : suratSaatIni.noUrutND;
+                let lND = nmND && nmND !== "" && nmND !== "N/A" ? (nmND === "LUAR" ? "LUAR" : `${nmND}/${suratSaatIni.klas}/${suratSaatIni.kepND}/${bl}/2026`) : "-";
+
+                let tglDispo = new Date();
+                if (suratSaatIni.riwayat && Array.isArray(suratSaatIni.riwayat)) {
+                    const dr = suratSaatIni.riwayat.find(r => r.status === "Selesai Disposisi");
+                    if (dr && dr.tgl) tglDispo = new Date(dr.tgl);
+                }
+                const tglFormatCetak = tglDispo.toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' });
+
+                let dariTeks = suratSaatIni.dari || 'Internal';
+                if (suratSaatIni.category === 'ND_KASUBAG' || suratSaatIni.category === 'MANUAL_KASUBAG') dariTeks = 'Kepala Sub Bagian Tata Usaha';
+
+                const tujuan = suratSaatIni.tujuanAkhir || [];
+                const instruksi = suratSaatIni.instruksiKepsta || [];
+                const catatan = suratSaatIni.catatanKepsta || "";
+
+                const getPenerima = (val) => tujuan.includes(val);
+                const getInstruksi = (val) => instruksi.includes(val);
+
+                pdfMake.vfs['Gotham-Light.ttf'] = window.gothamLightBase64;
+                const myFonts = { Gotham: { normal: 'Gotham-Light.ttf', bold: 'Gotham-Light.ttf' } };
+
+                const docDefinition = {
+                    pageSize: 'A4',
+                    pageMargins: [40, 70.87, 40, 30],
+                    defaultStyle: { font: 'Gotham', fontSize: 10 },
+                    content: [
+                        {
+                            columns: [
+                                { image: logoTVRI, width: 80, margin: [-10, -45, 0, 0] },
+                                {
+                                    stack: [
+                                        { text: 'DISPOSISI', alignment: 'center', bold: true, fontSize: 10 },
+                                        { text: 'KEPALA TVRI STASIUN JAWA TENGAH', alignment: 'center', bold: true },
+                                        { text: 'LPP TELEVISI REPUBLIK INDONESIA', alignment: 'center', bold: true }
+                                    ], width: '*'
+                                },
+                                { text: '', width: 50 }
+                            ],
+                            margin: [0, 0, 0, 15]
+                        },
+                        {
+                            table: {
+                                widths: [90, 5, 140, 80, 5, '*'],
+                                body: [
+                                    ['Nomor Agenda', ':', suratSaatIni.noAgenda || "-", '', '', ''],
+                                    ['Tanggal', ':', tglFormatCetak, '', '', ''],
+                                    ['Dari', ':', dariTeks, 'Nomor Surat', ':', suratSaatIni.nomorAsal || lND],
+                                    ['Hal', ':', { text: suratSaatIni.perihal || '-', bold: true, colSpan: 4 }, '', '', ''],
+                                    [{ text: 'Sifat', bold: true }, ':', {
+                                        colSpan: 4, columns: [
+                                            { width: 15, stack: [drawCheckbox(suratSaatIni.sifat === 'Biasa')] }, { width: 60, text: 'Biasa', margin: [5, 0, 0, 0] },
+                                            { width: 15, stack: [drawCheckbox(suratSaatIni.sifat === 'Penting')] }, { width: 60, text: 'Penting', margin: [5, 0, 0, 0] },
+                                            { width: 15, stack: [drawCheckbox(suratSaatIni.sifat === 'Segera')] }, { width: 60, text: 'Segera', margin: [5, 0, 0, 0] },
+                                            { width: 15, stack: [drawCheckbox(suratSaatIni.sifat === 'Rahasia')] }, { width: 60, text: 'Rahasia', margin: [5, 0, 0, 0] }
+                                        ]
+                                    }, '', '', '']
+                                ]
+                            },
+                            layout: 'noBorders',
+                            margin: [0, 0, 0, 10]
+                        },
+                        {
+                            table: {
+                                widths: [35, 215, 35, '*'],
+                                body: [
+                                    [getCheckmark(getPenerima('Kasubag TU')), 'Kasubag TU', getCheckmark(getPenerima('KMB')), 'Ketua Tim PP KMB'],
+                                    [getCheckmark(getPenerima('Umum')), 'Ketua Tim PP Umum', getCheckmark(getPenerima('Program')), 'Ketua Tim PP Program'],
+                                    [getCheckmark(getPenerima('Keuangan')), 'Ketua Tim PP Keuangan', getCheckmark(getPenerima('Berita')), 'Ketua Tim PP Berita'],
+                                    [getCheckmark(getPenerima('Teknik')), 'Ketua Tim PP Teknik', getCheckmark(getPenerima('PPK 1')), 'PPK 1'],
+                                    [getCheckmark(getPenerima('PU')), 'Ketua Tim PP PU', getCheckmark(getPenerima('PPK 2')), 'PPK 2'],
+                                    [getCheckmark(getPenerima('Promo')), 'Ketua Tim PP Promo', '', '']
+                                ]
+                            },
+                            margin: [0, 5, 0, 10]
+                        },
+                        {
+                            table: {
+                                widths: [35, 215, '*'],
+                                body: [
+                                    [{ text: 'Disposisi :', colSpan: 2, bold: true, border: [false, false, false, false], margin: [0, 5, 0, 5] }, {}, { text: 'Catatan :', bold: true, border: [false, false, false, false], margin: [15, 5, 0, 5] }],
+                                    [getCheckmark(getInstruksi('Diteliti/Diselesaikan')), { text: 'Diteliti/Diselesaikan' }, { text: catatan || '-', rowSpan: 15, fontSize: 10, margin: [15, 5, 0, 0], border: [false, false, false, false] }],
+                                    [getCheckmark(getInstruksi('Dipertimbangkan')), 'Dipertimbangkan', {}],
+                                    [getCheckmark(getInstruksi('Untuk diketahui/diperhatikan')), 'Untuk diketahui/diperhatikan', {}],
+                                    [getCheckmark(getInstruksi('Mewakili/menghadiri/mengikuti')), 'Mewakili/menghadiri/mengikuti', {}],
+                                    [getCheckmark(getInstruksi('Dikoordinasikan')), 'Dikoordinasikan', {}],
+                                    [getCheckmark(getInstruksi('Ditampung permasalahannya')), 'Ditampung permasalahannya', {}],
+                                    [getCheckmark(getInstruksi('Peringatan/pendekatan')), 'Peringatan/pendekatan', {}],
+                                    [getCheckmark(getInstruksi('Pendapat/analisa/saran')), 'Pendapat/analisa/saran', {}],
+                                    [getCheckmark(getInstruksi('Konsep jawaban/sambutan')), 'Konsep jawaban/sambutan', {}],
+                                    [getCheckmark(getInstruksi('Konsep Laporan')), 'Konsep Laporan', {}],
+                                    [getCheckmark(getInstruksi('Data diolah')), 'Data diolah', {}],
+                                    [getCheckmark(getInstruksi('Ditindaklanjuti/Proses Sesuai Peraturan dan Ketentuan Ybl')), 'Ditindaklanjuti/Proses Sesuai...', {}],
+                                    [getCheckmark(getInstruksi('Diagendakan/dijadwalkan')), 'Diagendakan/dijadwalkan', {}],
+                                    [getCheckmark(getInstruksi('Harap dibantu')), 'Harap dibantu', {}],
+                                    [getCheckmark(getInstruksi('File')), 'File', { border: [false, false, false, false], text: '' }]
+                                ]
+                            },
+                            margin: [0, 5, 0, 10]
+                        },
+                        { text: 'Sekretariat :', margin: [0, 5, 0, 10] },
+                        {
+                            columns: [
+                                { text: '', width: '*' },
+                                {
+                                    stack: [
+                                        { text: 'Semarang, ' + tglFormatCetak, margin: [0, 20, 0, 0] },
+                                        { text: 'Kepala TVRI Stasiun Jawa Tengah', margin: [0, 2, 0, 0], bold: true },
+                                        { image: ttdKepsta, width: 80, margin: [0, -15, 0, -25] },
+                                        { text: 'Sanny Damanik', bold: true, decoration: 'underline', margin: [0, 0, 0, 0] }
+                                    ],
+                                    alignment: 'left', width: 200
+                                }
+                            ]
+                        }
+                    ]
+                };
+
+                const dispoBuffer = await new Promise((resolve) => {
+                    pdfMake.createPdf(docDefinition, null, myFonts).getBuffer((buffer) => {
+                        resolve(buffer);
+                    });
+                });
+
+                loadingDiv.innerHTML = "<div style='position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:9999;display:flex;justify-content:center;align-items:center;'><h3 class='text-white fw-bold'>⏳ Menggabungkan PDF...</h3></div>";
+                const response = await fetch(urlPdfAsli);
+                const originalPdfBuffer = await response.arrayBuffer();
+
+                const { PDFDocument } = window.PDFLib;
+                const mergedPdf = await PDFDocument.create();
+
+                const dispoPdfDoc = await PDFDocument.load(dispoBuffer);
+                const originalPdfDoc = await PDFDocument.load(originalPdfBuffer);
+
+                const [dispoPage] = await mergedPdf.copyPages(dispoPdfDoc, [0]);
+                mergedPdf.addPage(dispoPage);
+
+                let pageIndicesToCopy = originalPdfDoc.getPageIndices();
+                if (!suratSaatIni.linkFileAsli && pageIndicesToCopy.length > 1) {
+                    pageIndicesToCopy.shift(); // Buang halaman pertama (disposisi lama)
+                }
+                const originalPages = await mergedPdf.copyPages(originalPdfDoc, pageIndicesToCopy);
+                originalPages.forEach((page) => mergedPdf.addPage(page));
+
+                const mergedPdfBytes = await mergedPdf.save();
+
+                loadingDiv.innerHTML = "<div style='position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:9999;display:flex;justify-content:center;align-items:center;'><h3 class='text-white fw-bold'>⏳ Menyimpan ke Database...</h3></div>";
+                const fileBlob = new Blob([mergedPdfBytes], { type: 'application/pdf' });
+                const namaFileBaru = 'final/Disposisi_Regenerate_' + Date.now() + '.pdf';
+                const storageRef = ref(storage, namaFileBaru);
+
+                await uploadBytes(storageRef, fileBlob);
+                const urlFinal = await getDownloadURL(storageRef);
+
+                await updateDoc(doc(db, "surat_dinas", id), {
+                    linkFile: urlFinal,
+                    log: arrayUnion({ st: "PDF Disposisi di-regenerate khusus perbaikan tanggal", t: new Date().toLocaleString() })
+                });
+                
+                alert("✅ Regenerate PDF Berhasil! Dokumen kini menampilkan tanggal disposisi asli.");
+            } catch (e) {
+                alert("Terjadi kesalahan sistem: " + e.message);
+                console.error(e);
+            } finally {
+                document.body.removeChild(loadingDiv);
+            }
+        };
