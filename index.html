@@ -930,7 +930,7 @@
 
                         <!-- STAT CARDS (TAILWIND STYLE) -->
                         <div class="row g-3 mb-4" id="dashboardStatsRow">
-                            <div class="col-md-6 col-lg-3">
+                            <div class="col-md-6 col-lg">
                                 <div class="card shadow-sm stat-card-warning h-100 p-1">
                                     <div class="card-body d-flex justify-content-between align-items-center">
                                         <div>
@@ -944,7 +944,7 @@
                                     </div>
                                 </div>
                             </div>
-                            <div class="col-md-6 col-lg-3">
+                            <div class="col-md-6 col-lg">
                                 <div class="card shadow-sm stat-card-success h-100 p-1">
                                     <div class="card-body d-flex justify-content-between align-items-center">
                                         <div>
@@ -958,7 +958,7 @@
                                     </div>
                                 </div>
                             </div>
-                            <div class="col-md-6 col-lg-3">
+                            <div class="col-md-6 col-lg">
                                 <div class="card shadow-sm stat-card-default h-100 p-1">
                                     <div class="card-body d-flex justify-content-between align-items-center">
                                         <div>
@@ -971,7 +971,7 @@
                                     </div>
                                 </div>
                             </div>
-                            <div class="col-md-6 col-lg-3">
+                            <div class="col-md-6 col-lg">
                                 <div class="card shadow-sm stat-card-info h-100 p-1">
                                     <div class="card-body d-flex justify-content-between align-items-center">
                                         <div>
@@ -984,6 +984,19 @@
                                         <div class="icon-box">📄</div>
                                     </div>
                                 </div>
+                            <div class="col-md-6 col-lg">
+                                <div class="card shadow-sm stat-card-info h-100 p-1">
+                                    <div class="card-body d-flex justify-content-between align-items-center">
+                                        <div>
+                                            <p class="stat-card-title">Total Dokumen Hari Ini</p>
+                                            <div class="d-flex align-items-baseline">
+                                                <h3 class="stat-card-value" id="statHariIni">0</h3>
+                                            </div>
+                                        </div>
+                                        <div class="icon-box">📅</div>
+                                    </div>
+                                </div>
+                            </div>
                             </div>
                         </div>
 
@@ -2049,18 +2062,39 @@
                 let statMenunggu = 0;
                 let statSelesai = 0;
                 let statPerhatian = 0;
-                let statTotal = window.globalSemuaSurat ? window.globalSemuaSurat.length : 0;
+                let statTotal = 0;
+                let statHariIni = 0;
+                let dToday = new Date();
+                dToday.setHours(0,0,0,0);
 
                 window.globalSemuaSurat.forEach((v) => {
                     const id = v.id;
-                    const r = window.userAktif?.role;
+                    const r = window.userAktif?.role || "";
+                    const rL = r.toLowerCase();
+                    const idUser = window.userAktif?.id || "";
                     const sRaw = v.status || "";
                     const isS = sRaw.toLowerCase().includes("selesai disposisi") || sRaw.toLowerCase().includes("disetujui kepsta") || sRaw.toLowerCase().includes("berita acara selesai");
                     
-                    if (sRaw.toLowerCase().includes("selesai") || sRaw.toLowerCase().includes("disetujui")) {
-                        statSelesai++;
-                    } else if (sRaw.toLowerCase().includes("menunggu")) {
-                        statMenunggu++;
+                    let isMilikUser = false;
+                    if (v.pic === idUser) isMilikUser = true;
+                    else if (v.tujuanAkhir && v.tujuanAkhir.includes(r)) isMilikUser = true;
+                    else if (v.tujuanStaf && v.tujuanStaf.includes(idUser)) isMilikUser = true;
+                    else if (sRaw.toLowerCase().includes(rL)) isMilikUser = true;
+                    else if (v.log && v.log.some(logItem => logItem.st.includes(r) || logItem.st.includes(idUser))) isMilikUser = true;
+                    else if (r === "Kepala Stasiun" || r === "Admin" || r === "Sekretariat") isMilikUser = true;
+
+                    if (isMilikUser) {
+                        statTotal++;
+                        if (sRaw.toLowerCase().includes("selesai") || sRaw.toLowerCase().includes("disetujui")) {
+                            statSelesai++;
+                        } else if (sRaw.toLowerCase().includes("menunggu")) {
+                            statMenunggu++;
+                        }
+                        let dSurat = v.tgl ? v.tgl.toDate() : new Date();
+                        dSurat.setHours(0,0,0,0);
+                        if (dSurat.getTime() === dToday.getTime()) {
+                            statHariIni++;
+                        }
                     }
                     
                     const tlUser = (v.tindakLanjut_v2 && v.tindakLanjut_v2[r]) ? v.tindakLanjut_v2[r] : null;
@@ -2621,6 +2655,8 @@
                 if(elS) elS.innerText = statSelesai;
                 if(elP) elP.innerText = arrAksiKhusus.length;
                 if(elT) elT.innerText = statTotal;
+                let elH = document.getElementById('statHariIni');
+                if(elH) elH.innerText = statHariIni;
             }
 
             window.bukaUploadFinal = (id) => {
@@ -3603,6 +3639,85 @@
                             ;
                         nAgendaBaru = String(cariNomor(pAgenda, 550));
                     }
+
+                    // 3. Olah Data untuk Ditampilkan di PDF
+                    const dO = dataSurat.tgl ? dataSurat.tgl.toDate() : new Date();
+                    const bl = ["I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X", "XI", "XII"][dO.getMonth()];
+                    let nmND = (dataSurat.category === 'ND_KEPSTA' || dataSurat.category === 'SK_KEPSTA') ? (dataSurat.noUrutNDKepsta || dataSurat.noUrutND) : dataSurat.noUrutND;
+                    let lND = nmND && nmND !== "" && nmND !== "N/A" ? (nmND === "LUAR" ? "LUAR" : `${nmND}/${dataSurat.klas}/${dataSurat.kepND}/${bl}/2026`) : "-";
+
+                    const tglSuratFormat = dO.toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' });
+                    let tglDispo = new Date();
+                    if (dataSurat.riwayat && Array.isArray(dataSurat.riwayat)) {
+                        const dr = dataSurat.riwayat.find(r => r.status === "Selesai Disposisi");
+                        if (dr && dr.tgl) tglDispo = new Date(dr.tgl);
+                    }
+                    const tglFormatCetak = tglDispo.toLocaleDateString('id-ID', {
+                        day: '2-digit',
+                        month: 'long',
+                        year: 'numeric'
+                    });
+
+                    // --- LOGIKA DINAMIS KOLOM DARI ---
+                    let dariTeks = dataSurat.dari || 'Internal';
+                    if (dataSurat.category === 'ND_KASUBAG' || dataSurat.category === 'MANUAL_KASUBAG') {
+                        dariTeks = 'Kepala Sub Bagian Tata Usaha';
+                    }
+
+                    const getPenerima = (val) => tujuan.includes(val);
+                    const getInstruksi = (val) => instruksi.includes(val);
+
+                    // 4. Register Font Gotham
+                    pdfMake.vfs['Gotham-Light.ttf'] = window.gothamLightBase64;
+                    const myFonts = {
+                        Gotham: {
+                            normal: 'Gotham-Light.ttf',
+                            bold: 'Gotham-Light.ttf'
+                        }
+                    };
+
+                    // 5. Struktur PDF
+                    const docDefinition = {
+                        pageSize: 'A4',
+                        pageMargins: [40, 70.87, 40, 30],
+                        defaultStyle: {
+                            font: 'Gotham',
+                            fontSize: 10
+                        },
+                        content: [{
+                            columns: [{
+                                image: logoTVRI,
+                                width: 80,
+                                margin: [-10, -45, 0, 0]
+                            }, {
+                                stack: [{
+                                    text: 'DISPOSISI',
+                                    alignment: 'center',
+                                    bold: true,
+                                    fontSize: 10
+                                }, {
+                                    text: 'KEPALA TVRI STASIUN JAWA TENGAH',
+                                    alignment: 'center',
+                                    bold: true
+                                }, {
+                                    text: 'LPP TELEVISI REPUBLIK INDONESIA',
+                                    alignment: 'center',
+                                    bold: true
+                                },],
+                                width: '*'
+                            }, {
+                                text: '',
+                                width: 50
+                            }],
+                            margin: [0, 0, 0, 15]
+                        }, {
+                            table: {
+                                widths: [90, 5, 140, 80, 5, '*'],
+                                body: [// MENCETAK NOMOR AGENDA BARU KE DALAM PDF
+                                    ['Nomor Agenda', ':', nAgendaBaru, '', '', ''], ['Tanggal', ':', tglSuratFormat, '', '', ''], ['Dari', ':', dariTeks, 'Nomor Surat', ':', dataSurat.nomorAsal || lND], ['Hal', ':', {
+                                        text: dataSurat.perihal || '-',
+                                        bold: true,
+                                        colSpan: 4
                                     }, '', '', ''], [{
                                         text: 'Sifat',
                                         bold: true
