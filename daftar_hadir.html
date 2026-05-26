@@ -61,7 +61,7 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-        import { getFirestore, doc, getDoc, collection, getDocs, orderBy, query } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+        import { getFirestore, doc, getDoc, collection, getDocs, orderBy, query, deleteDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyDTx_0nd6vz4ptWSI02mMCsKK0ZTeLSF_Q",
@@ -129,7 +129,8 @@
                         <td>${h.instansi || '-'}</td>
                         <td class="text-center">${imgTtd}</td>
                         <td class="text-center">
-                            <button onclick="window.unduhSertifikat(this, '${h.nama ? h.nama.replace(/'/g, "\\'") : '-'}', '${h.nip ? h.nip.replace(/'/g, "\\'") : '-'}', '${h.jabatan ? h.jabatan.replace(/'/g, "\\'") : '-'}', '${h.instansi ? h.instansi.replace(/'/g, "\\'") : '-'}')" class="btn btn-sm btn-primary fw-bold">⬇️ Cetak</button>
+                            <button onclick="window.unduhSertifikat(this, '${h.nama ? h.nama.replace(/'/g, "\\'") : '-'}', '${h.nip ? h.nip.replace(/'/g, "\\'") : '-'}', '${h.jabatan ? h.jabatan.replace(/'/g, "\\'") : '-'}', '${h.instansi ? h.instansi.replace(/'/g, "\\'") : '-'}')" class="btn btn-sm btn-primary fw-bold mb-1">⬇️ Cetak</button><br>
+                            <button onclick="window.hapusKehadiran(this, '${docH.id}')" class="btn btn-sm btn-danger fw-bold"><i class="fas fa-trash"></i> Hapus</button>
                         </td>
                     `;
                     tbody.appendChild(tr);
@@ -140,6 +141,37 @@
                 alert("Gagal memuat daftar hadir.");
             }
         }
+
+        
+        window.hapusKehadiran = async (btn, docId) => {
+            if (!confirm("Yakin ingin menghapus data absen peserta ini?")) return;
+            
+            btn.innerHTML = 'Menghapus...';
+            btn.disabled = true;
+            
+            try {
+                await deleteDoc(doc(db, "events", eventId, "kehadiran", docId));
+                // Remove row from table directly for snappy UX
+                const row = btn.closest('tr');
+                if (row) {
+                    row.remove();
+                    // Re-calculate numbering
+                    const tbody = document.getElementById('tbodyHadir');
+                    const allRows = tbody.children;
+                    for (let i = 0; i < allRows.length; i++) {
+                        const btnUrut = allRows[i].querySelector('.btn-no-urut');
+                        const hiddenInput = allRows[i].querySelector('.no-urut-input');
+                        if (btnUrut) btnUrut.innerText = i + 1;
+                        if (hiddenInput) hiddenInput.value = i + 1;
+                    }
+                }
+            } catch (error) {
+                console.error("Gagal hapus", error);
+                alert("Gagal menghapus data: " + error.message);
+                btn.innerHTML = '<i class="fas fa-trash"></i> Hapus';
+                btn.disabled = false;
+            }
+        };
 
         window.promptMoveRow = (btn) => {
             const row = btn.closest('tr');

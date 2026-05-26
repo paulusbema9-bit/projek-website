@@ -231,8 +231,8 @@
 
             <div class="row">
                 <div class="col-md-6 mb-3">
-                    <label class="form-label">NIP <span class="text-danger">*</span></label>
-                    <input type="text" id="inpNip" class="form-control" placeholder="NIP" required>
+                    <label class="form-label">NIP/NIK <span class="text-danger">*</span></label>
+                    <input type="text" id="inpNip" class="form-control" placeholder="NIP/NIK" required>
                 </div>
                 <div class="col-md-6 mb-3">
                     <label class="form-label">Nomor HP <span class="text-danger">*</span></label>
@@ -242,7 +242,7 @@
 
             <div class="row">
                 <div class="col-md-6 mb-3">
-                    <label class="form-label">Jabatan</label>
+                    <label class="form-label">Jabatan/Profesi</label>
                     <input type="text" id="inpJabatan" class="form-control" placeholder="Kosongkan jika tidak ada">
                 </div>
                 <div class="col-md-6 mb-4">
@@ -306,10 +306,24 @@
         // Resize canvas to be responsive
         function resizeCanvas() {
             const ratio =  Math.max(window.devicePixelRatio || 1, 1);
+            
+            // Simpan data coretan sebelum canvas di-resize
+            let data = null;
+            if (typeof signaturePad !== 'undefined' && signaturePad) {
+                data = signaturePad.toData();
+            }
+            
             canvas.width = canvas.offsetWidth * ratio;
             canvas.height = canvas.offsetHeight * ratio;
             canvas.getContext("2d").scale(ratio, ratio);
-            signaturePad.clear(); // otherwise signature gets messed up on resize
+            
+            // Kembalikan coretan setelah di-resize (agar tidak terhapus saat keyboard HP disembunyikan)
+            if (typeof signaturePad !== 'undefined' && signaturePad) {
+                signaturePad.clear();
+                if (data && data.length > 0) {
+                    signaturePad.fromData(data);
+                }
+            }
         }
         window.addEventListener("resize", resizeCanvas);
         resizeCanvas();
@@ -317,6 +331,15 @@
         window.clearSignature = () => {
             signaturePad.clear();
         };
+
+        
+        window.addEventListener('pageshow', (event) => {
+            // Bersihkan form setiap kali halaman dimuat atau dimuat ulang dari cache
+            document.getElementById('formKehadiran').reset();
+            if (typeof signaturePad !== 'undefined' && signaturePad) {
+                signaturePad.clear();
+            }
+        });
 
         async function init() {
             if (!eventId) {

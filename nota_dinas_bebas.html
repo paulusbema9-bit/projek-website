@@ -190,7 +190,7 @@
         <div class="row" style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px; margin-bottom: 15px;">
             <div>
                 <label class="form-label">No Urut ND</label>
-                <input type="number" id="noUrut" readonly placeholder="Memuat...">
+                <input type="text" id="noUrut" readonly placeholder="Memuat...">
             </div>
             <div>
                 <label class="form-label">Kode Klasifikasi</label>
@@ -312,6 +312,16 @@
         // --- DETEKSI AUTOMATIS MODE REVISI / EDIT DARI URL ---
         const urlParams = new URLSearchParams(window.location.search);
         let editDocId = urlParams.get('editId') || urlParams.get('id'); // Menangkap parameter editId dari dashboard utama
+        
+        // Cek jika ini mode regenerate otomatis dari background
+        if (urlParams.get('autoGenId')) {
+            editDocId = urlParams.get('autoGenId');
+            window.isAutoRegen = true;
+            // Suppress alert messages during auto generation
+            window.originalAlert = window.alert;
+            window.alert = function(msg) { console.log('Auto Regen Alert Suppressed:', msg); };
+        }
+        
         window.currentEditId = editDocId;
 
         // Fetch No Urut ND Utama
@@ -378,7 +388,33 @@
                         const data = docSnap.data();
 
                         // Kembalikan isian form sesuai data lama sebelum direvisi
-                        document.getElementById('noUrut').value = data.noUrutND || "";
+                        
+                        // Restore tanggal surat asli agar tidak ter-update menjadi tanggal hari ini saat direvisi
+                        if (data.tgl) {
+                            let tglObj = null;
+                            if (typeof data.tgl.toDate === 'function') {
+                                tglObj = data.tgl.toDate();
+                            } else if (data.tgl instanceof Date) {
+                                tglObj = data.tgl;
+                            } else if (typeof data.tgl === 'string' && !isNaN(new Date(data.tgl))) {
+                                tglObj = new Date(data.tgl);
+                            }
+                            
+                            if (tglObj) {
+                                const options = { year: 'numeric', month: 'long', day: 'numeric' };
+                                document.getElementById('tglSurat').value = tglObj.toLocaleDateString('id-ID', options);
+                                window.originalBln = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI', 'XII'][tglObj.getMonth()];
+                                window.originalThn = tglObj.getFullYear();
+                            } else if (typeof data.tgl === 'string') {
+                                document.getElementById('tglSurat').value = data.tgl;
+                            }
+                        }
+
+                        let extractedNo = data.noUrutND || "";
+                        if (extractedNo === "N/A" || extractedNo === "") {
+                            extractedNo = data.noUrutNDKepsta || extractedNo;
+                        }
+                        document.getElementById('noUrut').value = extractedNo;
                         document.getElementById('kodeSurat').value = data.klas || "PR.03.02";
                         document.getElementById('hal').value = data.perihal || "";
                         if (document.getElementById('alurAwal')) {
@@ -412,6 +448,22 @@
                     }
                 } catch (e) {
                     console.error("Gagal memuat data lama revisi:", e);
+                }
+
+                if (window.isAutoRegen) {
+                    // Jalankan upload otomatis secara background setelah data dimuat
+                    setTimeout(async () => {
+                        try {
+                            const blob = await generatePDFBlob();
+                            currentPdfBlob = blob;
+                            
+                            // Gunakan upload final murni, update doc, lalu kirim info berhasil ke parent
+                            await window.finalUploadNotaDinas_AutoGen();
+                            
+                        } catch (err) {
+                            console.error("Gagal saat mencoba auto generate:", err);
+                        }
+                    }, 2500);
                 }
             } else {
                 fetchNextNoUrut();
@@ -481,6 +533,59 @@
             document.getElementById('pdfFrame').src = '';
         }
 
+        // Fungsi bypass alert & close saat AutoGen dipanggil dari index
+        window.finalUploadNotaDinas_AutoGen = async () => {
+            if (!currentPdfBlob) return;
+            try {
+                const targetEditId = window.currentEditId ? String(window.currentEditId).trim() : null;
+                if (targetEditId) {
+                    const noUrut = document.getElementById('noUrut').value;
+                    const sifat = document.querySelector('input[name="sifat"]:checked').value;
+                    const hal = document.getElementById('hal').value;
+                    const kodeSurat = document.getElementById('kodeSurat').value;
+                    
+                    const isiSuratStr = tinymce.get('isiSuratEditor') ? tinymce.get('isiSuratEditor').getContent() : document.getElementById('isiSuratEditor').innerHTML;
+                    const verifikator = document.getElementById('alurAwal') ? document.getElementById('alurAwal').value : 'Kasubag TU';
+                    
+                    const pureNdBlob = window.purePdfBlob;
+                    
+                    // Upload Berkas ND Murni
+                    const ndFileName = `ND_MURNI_PROD_${Date.now()}.pdf`;
+                    const ndStorageRef = window.firebaseOps.ref(window.storage, 'nd_murni/' + ndFileName);
+                    await window.firebaseOps.uploadBytes(ndStorageRef, pureNdBlob);
+                    const downloadURL_ND_Murni = await window.firebaseOps.getDownloadURL(ndStorageRef);
+
+                    // Upload Berkas Gabungan
+                    const mainFileName = `ND_GABUNGAN_PROD_${Date.now()}.pdf`;
+                    const mainStorageRef = window.firebaseOps.ref(window.storage, 'surat/' + mainFileName);
+                    await window.firebaseOps.uploadBytes(mainStorageRef, currentPdfBlob);
+                    const downloadURL_Utama = await window.firebaseOps.getDownloadURL(mainStorageRef);
+
+                    const docRef = window.firebaseOps.doc(window.db, "surat_dinas", targetEditId);
+                    await window.firebaseOps.updateDoc(docRef, {
+                        noUrutND: String(noUrut),
+                        perihal: hal,
+                        klas: kodeSurat,
+                        sifat: sifat,
+                        linkFileND: downloadURL_ND_Murni,
+                        linkFileAsli: downloadURL_Utama,
+                        linkFile: downloadURL_Utama,
+                        isiSurat: isiSuratStr,
+                        alurAwal: verifikator,
+                        log: window.firebaseOps.arrayUnion({
+                            st: "File ND (Bebas) berhasil di-Regenerate ulang",
+                            t: new Date().toLocaleString()
+                        })
+                    });
+                }
+                if (window.parent) window.parent.postMessage('autoGenSuccess_' + window.currentEditId, '*');
+                window.close();
+            } catch (err) {
+                console.error("AutoGen error:", err);
+                window.close();
+            }
+        };
+
         async function finalUploadNotaDinas() {
             if (!currentPdfBlob) return;
 
@@ -492,7 +597,7 @@
                 // Logika Penomoran Surat Tugas dihapus untuk form bebas
 
                 // 2. Ambil Informasi Identitas Akun
-                const userStr = localStorage.getItem('userTU');
+                const userStr = localStorage.getItem('userAppSession');
                 const user = userStr ? JSON.parse(userStr) : { id: 'operator_otomatis', nama: 'Operator' };
 
                 const noUrut = document.getElementById('noUrut').value;
@@ -532,7 +637,7 @@
                 }
 
                 const verifikator = document.getElementById('alurAwal') ? document.getElementById('alurAwal').value : 'Kasubag TU';
-                const categoryVal = verifikator.startsWith('PPK') ? 'ND_PPK' : 'ND_KASUBAG';
+                const categoryVal = 'ND_KASUBAG';
 
                 // Paket data yang akan dikirim ke Firestore
                 const payload = {
@@ -549,9 +654,9 @@
                     isAuto: true,
                     alurAwal: verifikator,
                     category: categoryVal,
+                    category: categoryVal,
                     catatan: "",
-                    isiSurat: isiSuratStr,
-                    noUrutST: "N/A"
+                    isiSurat: isiSuratStr
                 };
                 if (downloadURL_RAB) payload.linkFileRAB = downloadURL_RAB;
 
@@ -573,6 +678,7 @@
                     await window.firebaseOps.addDoc(window.firebaseOps.collection(window.db, "surat_dinas"), {
                         ...payload,
                         noAgenda: "",
+                        noUrutST: "N/A",
                         category: categoryVal,
                         kepND: "II.3.1",
                         namaPic: user.nama || user.id,
@@ -644,7 +750,9 @@
 
                 const noUrut = document.getElementById('noUrut').value;
                 const kodeSurat = document.getElementById('kodeSurat').value;
-                const fullNoSurat = `${noUrut}/${kodeSurat}/II.3.1/${currentBln}/${currentThn}`;
+                const blnSurat = window.originalBln || currentBln;
+                const thnSurat = window.originalThn || currentThn;
+                const fullNoSurat = `${noUrut}/${kodeSurat}/II.3.1/${blnSurat}/${thnSurat}`;
 
                 const data = {
                     noSurat: fullNoSurat,
@@ -659,7 +767,12 @@
                     nipTtd: document.getElementById('nipTtd').value
                 };
 
-                let isiHtml = tinymce.get('isiSuratEditor').getContent();
+                let isiHtml = "";
+                if (tinymce.get('isiSuratEditor')) {
+                    isiHtml = tinymce.get('isiSuratEditor').getContent();
+                } else {
+                    isiHtml = document.getElementById('isiSuratEditor').innerHTML;
+                }
                 isiHtml = isiHtml.replace(/font-family\s*:\s*[^;"]*(?:;|$)/gi, '');
                 const isiSuratBlocks = htmlToPdfmake(isiHtml, {
                     defaultStyles: {

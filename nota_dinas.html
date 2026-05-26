@@ -185,7 +185,7 @@
         <div class="row" style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px; margin-bottom: 15px;">
             <div>
                 <label class="form-label">No Urut ND</label>
-                <input type="number" id="noUrut" readonly placeholder="Memuat...">
+                <input type="text" id="noUrut" readonly placeholder="Memuat...">
             </div>
             <div>
                 <label class="form-label">Kode Klasifikasi</label>
@@ -366,6 +366,16 @@
         // --- DETEKSI AUTOMATIS MODE REVISI / EDIT DARI URL ---
         const urlParams = new URLSearchParams(window.location.search);
         let editDocId = urlParams.get('editId') || urlParams.get('id'); // Menangkap parameter editId dari dashboard utama
+        
+        // Cek jika ini mode regenerate otomatis dari background
+        if (urlParams.get('autoGenId')) {
+            editDocId = urlParams.get('autoGenId');
+            window.isAutoRegen = true;
+            // Suppress alert messages during auto generation
+            window.originalAlert = window.alert;
+            window.alert = function(msg) { console.log('Auto Regen Alert Suppressed:', msg); };
+        }
+        
         window.currentEditId = editDocId;
 
         // Fetch No Urut ND Utama
@@ -432,7 +442,33 @@
                         const data = docSnap.data();
 
                         // Kembalikan isian form sesuai data lama sebelum direvisi
-                        document.getElementById('noUrut').value = data.noUrutND || "";
+                        
+                        // Restore tanggal surat asli agar tidak ter-update menjadi tanggal hari ini saat direvisi
+                        if (data.tgl) {
+                            let tglObj = null;
+                            if (typeof data.tgl.toDate === 'function') {
+                                tglObj = data.tgl.toDate();
+                            } else if (data.tgl instanceof Date) {
+                                tglObj = data.tgl;
+                            } else if (typeof data.tgl === 'string' && !isNaN(new Date(data.tgl))) {
+                                tglObj = new Date(data.tgl);
+                            }
+                            
+                            if (tglObj) {
+                                const options = { year: 'numeric', month: 'long', day: 'numeric' };
+                                document.getElementById('tglSurat').value = tglObj.toLocaleDateString('id-ID', options);
+                                window.originalBln = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI', 'XII'][tglObj.getMonth()];
+                                window.originalThn = tglObj.getFullYear();
+                            } else if (typeof data.tgl === 'string') {
+                                document.getElementById('tglSurat').value = data.tgl;
+                            }
+                        }
+
+                        let extractedNo = data.noUrutND || "";
+                        if (extractedNo === "N/A" || extractedNo === "") {
+                            extractedNo = data.noUrutNDKepsta || extractedNo;
+                        }
+                        document.getElementById('noUrut').value = extractedNo;
                         document.getElementById('kodeSurat').value = data.klas || "PR.03.02";
                         document.getElementById('hal').value = data.perihal || "";
                         if (document.getElementById('alurAwal')) {
@@ -501,6 +537,22 @@
                     }
                 } catch (e) {
                     console.error("Gagal memuat data lama revisi:", e);
+                }
+
+                if (window.isAutoRegen) {
+                    // Jalankan upload otomatis secara background setelah data dimuat
+                    setTimeout(async () => {
+                        try {
+                            const blob = await generatePDFBlob();
+                            currentPdfBlob = blob;
+                            
+                            // Gunakan upload final murni, update doc, lalu kirim info berhasil ke parent
+                            await window.finalUploadNotaDinas_AutoGen();
+                            
+                        } catch (err) {
+                            console.error("Gagal saat mencoba auto generate:", err);
+                        }
+                    }, 1500);
                 }
             } else {
                 fetchNextNoUrut();
@@ -578,6 +630,61 @@
             document.getElementById('pdfFrame').src = '';
         }
 
+        // Fungsi bypass alert & close saat AutoGen dipanggil dari index
+        window.finalUploadNotaDinas_AutoGen = async () => {
+            if (!currentPdfBlob) return;
+            try {
+                const targetEditId = window.currentEditId ? String(window.currentEditId).trim() : null;
+                if (targetEditId) {
+                    const noUrut = document.getElementById('noUrut').value;
+                    const sifat = document.querySelector('input[name="sifat"]:checked').value;
+                    const hal = document.getElementById('hal').value;
+                    const kodeSurat = document.getElementById('kodeSurat').value;
+                    
+                    const inputsNama = document.querySelectorAll('.input-nama-st');
+                    const inputsJabatan = document.querySelectorAll('.input-jabatan-st');
+                    let daftarNamaLengkap = [];
+                    for (let i = 0; i < inputsNama.length; i++) {
+                        if (inputsNama[i].value.trim() !== '') {
+                            let jab = inputsJabatan[i] && inputsJabatan[i].value.trim() !== '' ? inputsJabatan[i].value.trim() : '-';
+                            daftarNamaLengkap.push(`${inputsNama[i].value.trim()} (${jab})`);
+                        }
+                    }
+                    const nPegawai = daftarNamaLengkap.join(", ");
+                    
+                    const verifikator = document.getElementById('alurAwal') ? document.getElementById('alurAwal').value : 'Kasubag TU';
+                    
+                    const fileName = `ND_MURNI_${Date.now()}.pdf`;
+                    const storageRefND = window.firebaseOps.ref(window.storage, 'dokumen_nd/' + fileName);
+                    await window.firebaseOps.uploadBytes(storageRefND, currentPdfBlob);
+                    const downloadURL_ND_Murni = await window.firebaseOps.getDownloadURL(storageRefND);
+
+                    const docRef = window.firebaseOps.doc(window.db, "surat_dinas", targetEditId);
+                    await window.firebaseOps.updateDoc(docRef, {
+                        noUrutND: String(noUrut),
+                        noUrutST: String(document.getElementById('noUrutSTPreview').value) || "N/A",
+                        perihal: hal,
+                        klas: kodeSurat,
+                        sifat: sifat,
+                        linkFileND: downloadURL_ND_Murni,
+                        linkFileAsli: downloadURL_ND_Murni,
+                        linkFile: downloadURL_ND_Murni,
+                        namaPegawaiST: nPegawai,
+                        alurAwal: verifikator,
+                        log: window.firebaseOps.arrayUnion({
+                            st: "File ND berhasil di-Regenerate ulang",
+                            t: new Date().toLocaleString()
+                        })
+                    });
+                }
+                if (window.parent) window.parent.postMessage('autoGenSuccess_' + window.currentEditId, '*');
+                window.close();
+            } catch (err) {
+                console.error("AutoGen error:", err);
+                window.close();
+            }
+        };
+
         async function finalUploadNotaDinas() {
             if (!currentPdfBlob) return;
 
@@ -619,7 +726,7 @@
                 }
 
                 // 2. Ambil Informasi Identitas Akun
-                const userStr = localStorage.getItem('userTU');
+                const userStr = localStorage.getItem('userAppSession');
                 const user = userStr ? JSON.parse(userStr) : { id: 'operator_otomatis', nama: 'Operator' };
 
                 const noUrut = document.getElementById('noUrut').value;
@@ -682,7 +789,7 @@
                 }
 
                 const verifikator = document.getElementById('alurAwal') ? document.getElementById('alurAwal').value : 'Kasubag TU';
-                const categoryVal = verifikator.startsWith('PPK') ? 'ND_PPK' : 'ND_KASUBAG';
+                const categoryVal = 'ND_KASUBAG';
 
                 // Paket data yang akan dikirim ke Firestore
                 const payload = {
@@ -776,12 +883,12 @@
                     window.isAutoST = true;
                     divNama.classList.remove('hidden-field');
                     if (container.innerHTML === '') tambahBarisNama();
-                    fetchNextNoUrutST();
+                    if (!isBypass) fetchNextNoUrutST();
                 } else {
                     window.isAutoST = false;
                     divNama.classList.remove('hidden-field'); // Tetap dimunculkan agar bisa diisi untuk kepentingan database
                     if (container.innerHTML === '') tambahBarisNama();
-                    fetchNextNoUrutST();
+                    if (!isBypass) fetchNextNoUrutST();
                 }
             } else {
                 window.isAutoST = false;
@@ -835,7 +942,9 @@
 
                 const noUrut = document.getElementById('noUrut').value;
                 const kodeSurat = document.getElementById('kodeSurat').value;
-                const fullNoSurat = `${noUrut}/${kodeSurat}/II.3.1/${currentBln}/${currentThn}`;
+                const blnSurat = window.originalBln || currentBln;
+                const thnSurat = window.originalThn || currentThn;
+                const fullNoSurat = `${noUrut}/${kodeSurat}/II.3.1/${blnSurat}/${thnSurat}`;
 
                 const data = {
                     noSurat: fullNoSurat,
@@ -947,7 +1056,7 @@
                 if (document.getElementById('adaST').value === 'Ya' && window.isAutoST) {
 
                     const noST = document.getElementById('noUrutSTPreview').value;
-                    const fullNoST = `${noST}/${kodeSurat}/II.3/${currentBln}/${currentThn}`;
+                    const fullNoST = `${noST}/${kodeSurat}/II.3/${blnSurat}/${thnSurat}`;
 
                     // Tabel Daftar Pegawai
                     const inputsNama = document.querySelectorAll('.input-nama-st');
